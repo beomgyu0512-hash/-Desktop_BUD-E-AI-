@@ -1,13 +1,7 @@
-import clipboard
 import json
 import random
 from PIL import Image
-from PIL import ImageGrab
-
-from pynput import keyboard
 import threading
-
-from pyautogui import screenshot
 import io
 import requests
 import json
@@ -18,6 +12,21 @@ import subprocess
 import time 
 
 import sys
+
+try:
+    import clipboard
+except Exception:
+    clipboard = None
+
+try:
+    from PIL import ImageGrab
+except Exception:
+    ImageGrab = None
+
+try:
+    from pyautogui import screenshot
+except Exception:
+    screenshot = None
 
 # Add the parent directory to the sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -77,6 +86,11 @@ url = 'https://api.hyprlab.io/v1/chat/completions'
 HYPRLAB_API_KEY = "hypr-lab-xxxxxxx" # os.getenv("HYPRLAB_API_KEY")
 
 florence2_server_url = "http://213.173.96.19:5002/" 
+
+
+def desktop_feature_unavailable_response(feature_name, conversation, scratch_pad):
+    skill_response = f"{feature_name} is not available in this server environment."
+    return skill_response, conversation, scratch_pad
 
 
 
@@ -140,6 +154,9 @@ def get_caption_from_clipboard_gpt4o_hyprlab(transcription_response, conversatio
     updated_conversation = conversation
     updated_scratch_pad = scratch_pad
 
+    if ImageGrab is None and clipboard is None:
+        return desktop_feature_unavailable_response("Clipboard access", conversation, scratch_pad)
+
 
     try:
        content = ImageGrab.grabclipboard()
@@ -201,6 +218,9 @@ def get_caption_from_screenshot_gpt4o_hyprlab(transcription_response, conversati
     updated_conversation = conversation
     updated_scratch_pad = scratch_pad
 
+    if screenshot is None:
+        return desktop_feature_unavailable_response("Screenshot capture", conversation, scratch_pad)
+
 
 
     # Take a screenshot and open it with PIL
@@ -237,6 +257,9 @@ def get_caption_from_screenshot_florence2(transcription_response, conversation, 
     skill_response = "What BUD-E is seeing: "
     updated_conversation = conversation
     updated_scratch_pad = scratch_pad
+
+    if screenshot is None:
+        return desktop_feature_unavailable_response("Screenshot capture", conversation, scratch_pad)
 
 
     # Take a screenshot and open it with PIL
@@ -293,6 +316,9 @@ def get_caption_from_clipboard_florence2(transcription_response, conversation, s
     skill_response = "What BUD-E is seeing: "
     updated_conversation = conversation
     updated_scratch_pad = scratch_pad
+
+    if ImageGrab is None and clipboard is None:
+        return desktop_feature_unavailable_response("Clipboard access", conversation, scratch_pad)
 
 
 
