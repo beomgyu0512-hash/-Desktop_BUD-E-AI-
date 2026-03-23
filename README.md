@@ -32,7 +32,9 @@ Recommendation: Make a venv and install everything in the venv. Make sure your m
 Set your API keys here:
 ```sh
 echo 'export PORCUPINE_API_KEY="yourporcupineapikeyhere"' >> ~/.bashrc
-echo 'export GROQ_API_KEY="yourgroqapikeyhere"' >> ~/.bashrc
+echo 'export MOONSHOT_API_KEY="yourkimiapikeyhere"' >> ~/.bashrc
+echo 'export KIMI_BASE_URL="https://api.moonshot.cn/v1"' >> ~/.bashrc
+echo 'export KIMI_MODEL="moonshot-v1-8k"' >> ~/.bashrc
 echo 'export DEEPGRAM_API_KEY="yourdeepgramapikeyhere"' >> ~/.bashrc
 source ~/.bashrc
 ```
@@ -43,6 +45,72 @@ git clone https://github.com/christophschuhmann/Desktop_BUD-E
 pip install -U -r requirements.txt
 python3 buddy.py
 ```
+
+## Child Learning Companion Layer
+
+This fork also includes an optional child-focused project layer:
+
+- child-oriented prompt at `prompts/child_learning_companion_system_prompt.txt`
+- starter educational skills at `skills/learning_companion.py`
+- setup notes at `docs/child-learning-companion.md`
+
+To enable the child-focused prompt for a run:
+```sh
+export BUD_E_SYSTEM_PROMPT_FILE=prompts/child_learning_companion_system_prompt.txt
+python3 buddy.py
+```
+
+To run without a wake word during development:
+```sh
+export BUD_E_DISABLE_WAKE_WORD=1
+python3 buddy.py
+```
+
+To test without microphone input:
+```sh
+export BUD_E_TEXT_MODE=1
+python3 buddy.py
+```
+
+## Browser UI
+
+This fork also includes a minimal browser-based Buddy chat UI.
+
+Start it with:
+```sh
+python3 web_app.py
+```
+
+Then open:
+```sh
+http://127.0.0.1:8000
+```
+
+Optional environment variables:
+
+- `BUD_E_WEB_HOST` defaults to `127.0.0.1`
+- `BUD_E_WEB_PORT` defaults to `8000`
+
+The current web version is text-only. It reuses the same prompt and skill pipeline as the terminal flow, including local keyword skills such as telling the current time.
+
+To let other devices on the same local network open it:
+```sh
+BUD_E_WEB_HOST=0.0.0.0 python3 web_app.py
+```
+
+Then open `http://YOUR_LAN_IP:8000` from another device on the same Wi-Fi.
+
+For deployment notes, see `docs/deployment.md`.
+
+## Default LLM provider
+
+This fork is configured to use the Kimi API by default through Moonshot's OpenAI-compatible endpoint.
+
+Required environment variables:
+
+- `MOONSHOT_API_KEY`
+- `KIMI_BASE_URL` defaults to `https://api.moonshot.cn/v1`
+- `KIMI_MODEL` defaults to `moonshot-v1-8k`
 
 ## Skills
 

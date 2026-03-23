@@ -43,7 +43,6 @@ from api_configs.configs import get_llm_config, get_tts_config, get_asr_config
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from langchain_together import Together
 
 
 # Import configurations from a local module
@@ -511,4 +510,3 @@ def deep_search_and_summarize_wikipedia(transcription_response, conversation, sc
     skill_response = f"Here is a summary of the Wikipedia article on '{topic}':\n\n{summary}\n\nSource: {source_url}"
     print(skill_response)
     return skill_response, conversation, scratch_pad
-

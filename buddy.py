@@ -43,9 +43,6 @@ import io
 from PIL import Image
 from PIL import ImageGrab
 
-# pynput: A library for controlling and monitoring input devices (keyboard in this case)
-from pynput import keyboard
-
 # Event: A threading primitive that allows communication between threads
 from threading import Event
 
@@ -69,6 +66,7 @@ from types import ModuleType
 
 # Import the sys module for accessing Python interpreter variables
 import sys
+import inspect
 
 # Import configurations from a local module
 from api_configs.configs import get_llm_config, get_tts_config, get_asr_config
@@ -82,7 +80,6 @@ from wake_words import get_wake_words, WakeWordEngine
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from langchain_together import Together
 from llm_definition import get_llm, LanguageModelProcessor
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import (
@@ -108,6 +105,31 @@ tts_model = tts_config["apis"][tts_api]["model"]
 # Set the API key for the TTS service
 tts_api_key = tts_config["apis"][tts_api]["api_key"]
 
+
+SKILL_COMMENT_KEYWORDS = ("KEYWORD ACTIVATED SKILL:", "LM ACTIVATED SKILL:")
+
+
+def debug_enabled() -> bool:
+    value = os.getenv("BUD_E_DEBUG", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def extract_skill_function_names_from_file(filepath: str, keywords=SKILL_COMMENT_KEYWORDS) -> set[str]:
+    skill_function_names = set()
+
+    with open(filepath, "r") as file:
+        lines = file.readlines()
+
+    lowered_keywords = tuple(keyword.lower() for keyword in keywords)
+    for i in range(len(lines) - 1):
+        if any(keyword in lines[i].lower() for keyword in lowered_keywords):
+            if re.match(r'^\s*def\s+\w+\s*\(', lines[i + 1]):
+                function_name = re.findall(r'def\s+(\w+)\s*\(', lines[i + 1])[0]
+                skill_function_names.add(function_name)
+
+    return skill_function_names
+
+
 # Define a function to import all functions from a specified directory
 def import_all_functions_from_directory(directory: str) -> dict:
     # Initialize an empty dictionary to store activated skills
@@ -128,19 +150,21 @@ def import_all_functions_from_directory(directory: str) -> dict:
             module = importlib.util.module_from_spec(spec)
             # Execute the module
             spec.loader.exec_module(module)
+            skill_function_names = extract_skill_function_names_from_file(filepath)
 
             # Iterate over all attributes in the module
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
-                # Check if the attribute is a function and not a built-in (doesn't start with __)
-                if callable(attr) and not attr_name.startswith('__'):
+                is_module_function = inspect.isfunction(attr) and attr.__module__ == module.__name__
+                if is_module_function and attr_name in skill_function_names:
                     # Add the function to the activated_skills dictionary
                     activated_skills[attr_name] = attr
                     # Make the function globally accessible
                     globals()[attr_name] = attr
                     
                     # Print information about the imported function
-                    print(f"Imported function: {attr_name} from module {module_name}")
+                    if debug_enabled():
+                        print(f"Imported function: {attr_name} from module {module_name}")
 
     # Return the dictionary of activated skills
     return activated_skills
@@ -201,11 +225,23 @@ skills_dict = import_all_functions_from_directory(skills_directory)
 
 # Extract skills that are activated by a specific keyword
 keyword_activated_skills_dict = extract_activated_skills_from_directory(skills_directory, "KEYWORD ACTIVATED SKILL:")    
-print(keyword_activated_skills_dict)
+if debug_enabled():
+    print(keyword_activated_skills_dict)
 
 # Extract skills that are activated by a language model
 lm_activated_skills_dict = extract_activated_skills_from_directory(skills_directory, "LM ACTIVATED SKILL:")    
-print(lm_activated_skills_dict)
+if debug_enabled():
+    print(lm_activated_skills_dict)
+
+
+def wake_words_disabled() -> bool:
+    value = os.getenv("BUD_E_DISABLE_WAKE_WORD", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def text_input_mode_enabled() -> bool:
+    value = os.getenv("BUD_E_TEXT_MODE", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
 
 
 # Define a function for conditional execution of skills
@@ -316,6 +352,8 @@ class TextToSpeech:
         if not self.is_installed("ffplay"):
             raise ValueError("ffplay not found, necessary to stream audio.")
 
+        from pynput import keyboard
+
         # Setup hotkey listener for Ctrl+Shift to stop TTS
         with keyboard.GlobalHotKeys({'<ctrl>+<shift>': self.on_activate}) as self.listener:
             # Prepare ffplay command for audio playback
@@ -409,6 +447,8 @@ class ConversationManager:
         await self.main()
 
     async def speak_response(self, response):
+        if text_input_mode_enabled():
+            return
         tts_task = asyncio.to_thread(self.tts.speak, response, self.stop_event)
         try:
             await tts_task
@@ -422,19 +462,27 @@ class ConversationManager:
         while self.conversation_active:
             self.stop_event.clear()
             self.tts = TextToSpeech()  # Create a new TTS instance for each response
-            
-            print("Listening for your command...")
-            await get_transcript(handle_full_sentence)
+
+            if text_input_mode_enabled():
+                self.transcription_response = (await asyncio.to_thread(input, "You: ")).strip()
+            else:
+                print("Listening for your command...")
+                await get_transcript(handle_full_sentence)
             
             if "goodbye" in self.transcription_response.lower():
                 self.conversation_active = False
                 break
 
+            if not self.transcription_response.strip():
+                continue
+
             all_skill_responses = ""
+            matched_keyword_skill = False
             # Process keyword-activated skills
             for keyword_activated_function in keyword_activated_skills_dict:
                 skill_response = ""
-                print(keyword_activated_function)
+                if debug_enabled():
+                    print(keyword_activated_function)
                 condition_list = parse_list_of_lists(keyword_activated_skills_dict[keyword_activated_function])
                 try:
                     skill_response, updated_conversation, updated_scratch_pad = conditional_execution(
@@ -443,14 +491,24 @@ class ConversationManager:
                     )
                     self.llm.conversation = updated_conversation
                     self.ScratchPad = updated_scratch_pad
-                    all_skill_responses += "\n" + skill_response
+                    if skill_response.strip():
+                        matched_keyword_skill = True
+                        all_skill_responses += "\n" + skill_response
                 except:
                     pass
      
-            print(self.transcription_response + all_skill_responses)
+            if debug_enabled():
+                print(self.transcription_response + all_skill_responses)
+
+            if matched_keyword_skill:
+                final_skill_response = all_skill_responses.strip()
+                print(f"AI: {final_skill_response}")
+                await self.speak_response(final_skill_response)
+                self.transcription_response = ""
+                continue
             
-            # Update system prompt with LM activated skills
-            system_prompt = self.llm.get_system_prompt()
+            # Start from the base prompt each turn so LM skill descriptions do not duplicate endlessly.
+            system_prompt = self.llm.base_system_prompt
             for lm_activated_skill in lm_activated_skills_dict:
                 system_prompt += "\n" + lm_activated_skills_dict[lm_activated_skill]
             self.llm.update_system_prompt(system_prompt)
@@ -460,15 +518,18 @@ class ConversationManager:
             
             # Process the transcription and generate a response
             llm_response = self.llm.process(self.transcription_response + all_skill_responses)
-            print("llm_response", str(llm_response))
+            if debug_enabled():
+                print("llm_response", str(llm_response))
 
             # Process LM-activated skills
             perform_lm_skill = False
             for lm_activated_function in lm_activated_skills_dict:
                 skill_response = ""
-                print(lm_activated_function)
+                if debug_enabled():
+                    print(lm_activated_function)
                 opening_tag, closing_tag = extract_opening_and_closing_tags(lm_activated_skills_dict[lm_activated_function])
-                print(opening_tag, closing_tag)
+                if debug_enabled():
+                    print(opening_tag, closing_tag)
                 
                 if (opening_tag and closing_tag and 
                     opening_tag.lower() in llm_response.lower() and 
@@ -480,7 +541,8 @@ class ConversationManager:
                     pattern = rf"<{opening_tag_name}>(.*?)</{closing_tag_name}>"
                     LMGeneratedParameters = re.findall(pattern, llm_response)
                     LMGeneratedParameters = LMGeneratedParameters[0]
-                    print("LMGeneratedParameters", LMGeneratedParameters)
+                    if debug_enabled():
+                        print("LMGeneratedParameters", LMGeneratedParameters)
                
                     try:
                         skill_response, updated_conversation, updated_scratch_pad = conditional_execution(
@@ -505,6 +567,12 @@ class ConversationManager:
 
 async def main():
     conversation_manager = ConversationManager()
+
+    if wake_words_disabled():
+        print("Wake word disabled. Starting conversation immediately...")
+        await conversation_manager.start_conversation()
+        return
+
     wake_words = get_wake_words()
     wake_word_engine = WakeWordEngine(wake_words, conversation_manager.start_conversation)
     wake_word_engine.initialize()

@@ -1,7 +1,17 @@
-import os 
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
 llm_config = {
-    "default_model": "groq",
+    "default_model": "kimi",
     "models": {
+        "kimi": {
+            "model_name": os.getenv("KIMI_MODEL", "moonshot-v1-8k"),
+            "temperature": 0,
+            "api_key": os.getenv("MOONSHOT_API_KEY"),
+            "base_url": os.getenv("KIMI_BASE_URL", "https://api.moonshot.cn/v1"),
+        },
         "together": {
             "model": "meta-llama/Llama-3-8b-chat-hf",
             "max_tokens": 400,

@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Buddy Web</title>
+    <style>
+      :root {
+        --bg: #f5efe3;
+        --panel: #fffaf0;
+        --ink: #17212b;
+        --muted: #66727f;
+        --accent: #ff7a1a;
+        --accent-soft: #ffd9bd;
+        --border: #e6d7c2;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, #fff9ea 0, transparent 28%),
+          radial-gradient(circle at top right, #ffe8d3 0, transparent 22%),
+          linear-gradient(180deg, #fffaf2 0%, var(--bg) 100%);
+      }
+
+      .shell {
+        width: min(960px, calc(100vw - 32px));
+        margin: 24px auto;
+        border: 1px solid var(--border);
+        border-radius: 28px;
+        overflow: hidden;
+        background: rgba(255, 250, 240, 0.92);
+        box-shadow: 0 24px 80px rgba(81, 52, 19, 0.12);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero {
+        padding: 28px 28px 20px;
+        background:
+          linear-gradient(135deg, rgba(255, 122, 26, 0.16), rgba(255, 200, 102, 0.12)),
+          linear-gradient(180deg, #fff9ef, #fff6ea);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(255, 122, 26, 0.16);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      h1 {
+        margin: 16px 0 8px;
+        font-size: clamp(32px, 6vw, 52px);
+        line-height: 0.96;
+        letter-spacing: -0.04em;
+      }
+
+      .subhead {
+        margin: 0;
+        max-width: 680px;
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+
+      .content {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        min-height: 640px;
+      }
+
+      .chat-panel {
+        padding: 22px;
+        border-right: 1px solid var(--border);
+      }
+
+      .sidebar {
+        padding: 22px;
+        background:
+          linear-gradient(180deg, rgba(255, 244, 229, 0.85), rgba(255, 250, 242, 0.96));
+      }
+
+      .messages {
+        height: 430px;
+        overflow: auto;
+        padding-right: 8px;
+      }
+
+      .message {
+        margin-bottom: 14px;
+        padding: 14px 16px;
+        border-radius: 20px;
+        max-width: 88%;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        animation: rise 180ms ease-out;
+      }
+
+      .message.user {
+        margin-left: auto;
+        background: linear-gradient(135deg, #ff8e38, #ff6c0f);
+        color: white;
+        border-bottom-right-radius: 6px;
+      }
+
+      .message.buddy {
+        background: white;
+        border: 1px solid var(--border);
+        border-bottom-left-radius: 6px;
+      }
+
+      .composer {
+        margin-top: 18px;
+        display: grid;
+        gap: 12px;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 112px;
+        resize: vertical;
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        background: white;
+        padding: 16px;
+        font: inherit;
+        color: var(--ink);
+        outline: none;
+      }
+
+      textarea:focus {
+        border-color: rgba(255, 122, 26, 0.55);
+        box-shadow: 0 0 0 4px rgba(255, 122, 26, 0.12);
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .primary {
+        background: linear-gradient(135deg, #ff8c31, #ff6a00);
+        color: white;
+        font-weight: 600;
+      }
+
+      .secondary {
+        background: white;
+        color: var(--ink);
+        border: 1px solid var(--border);
+      }
+
+      .status {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .card {
+        padding: 18px;
+        border-radius: 22px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.76);
+        margin-bottom: 16px;
+      }
+
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 18px;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .chip {
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: white;
+        border: 1px solid var(--border);
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 840px) {
+        .content {
+          grid-template-columns: 1fr;
+        }
+
+        .chat-panel {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .messages {
+          height: 360px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="hero">
+        <div class="eyebrow">Buddy Web · 儿童学习伙伴</div>
+        <h1>在浏览器里<br>和 Buddy 聊天</h1>
+        <p class="subhead">
+          这是 Buddy 的最小网页版。先从文字聊天跑通，后面再接语音、家长控制和更完整的学习技能。
+        </p>
+      </section>
+
+      <section class="content">
+        <div class="chat-panel">
+          <div id="messages" class="messages"></div>
+
+          <div class="composer">
+            <textarea id="composer" placeholder="输入问题，比如：你是谁、现在几点、帮我讲讲重力"></textarea>
+            <div class="actions">
+              <button id="send" class="primary">发送</button>
+              <button id="reset" class="secondary">新对话</button>
+              <span id="status" class="status">准备好了</span>
+            </div>
+          </div>
+        </div>
+
+        <aside class="sidebar">
+          <div class="card">
+            <h2>可以先试这些</h2>
+            <div class="chips">
+              <button class="chip" data-prompt="你是谁">你是谁</button>
+              <button class="chip" data-prompt="现在几点">现在几点</button>
+              <button class="chip" data-prompt="帮我用小朋友能懂的方式讲什么是重力">讲讲重力</button>
+              <button class="chip" data-prompt="给8岁小朋友做一个10分钟分数学习计划">学习计划</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>当前版本</h2>
+            <p>支持浏览器文字聊天，保留 Buddy 的提示词和技能机制。</p>
+            <p>语音输入、语音播报和家长设置面板还没接入这个页面。</p>
+          </div>
+        </aside>
+      </section>
+    </div>
+
+    <script>
+      const messagesEl = document.getElementById("messages");
+      const composerEl = document.getElementById("composer");
+      const sendEl = document.getElementById("send");
+      const resetEl = document.getElementById("reset");
+      const statusEl = document.getElementById("status");
+      const SESSION_KEY = "buddy-web-session-id";
+
+      function getSessionId() {
+        return window.localStorage.getItem(SESSION_KEY);
+      }
+
+      function setSessionId(sessionId) {
+        window.localStorage.setItem(SESSION_KEY, sessionId);
+      }
+
+      function clearSessionId() {
+        window.localStorage.removeItem(SESSION_KEY);
+      }
+
+      function appendMessage(role, text) {
+        const node = document.createElement("div");
+        node.className = `message ${role}`;
+        node.textContent = text;
+        messagesEl.appendChild(node);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      async function sendMessage(message) {
+        appendMessage("user", message);
+        composerEl.value = "";
+        sendEl.disabled = true;
+        statusEl.textContent = "Buddy 正在思考…";
+
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message,
+              session_id: getSessionId(),
+            }),
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || "请求失败");
+          }
+
+          setSessionId(payload.session_id);
+          appendMessage("buddy", payload.reply);
+          statusEl.textContent = "已完成";
+        } catch (error) {
+          appendMessage("buddy", `出错了：${error.message}`);
+          statusEl.textContent = "请求失败";
+        } finally {
+          sendEl.disabled = false;
+          composerEl.focus();
+        }
+      }
+
+      sendEl.addEventListener("click", () => {
+        const message = composerEl.value.trim();
+        if (message) {
+          sendMessage(message);
+        }
+      });
+
+      composerEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          const message = composerEl.value.trim();
+          if (message) {
+            sendMessage(message);
+          }
+        }
+      });
+
+      resetEl.addEventListener("click", async () => {
+        const sessionId = getSessionId();
+        if (sessionId) {
+          await fetch("/api/reset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId }),
+          });
+        }
+
+        clearSessionId();
+        messagesEl.innerHTML = "";
+        appendMessage("buddy", "新对话已经开始。告诉我你想学什么。");
+        statusEl.textContent = "已重置";
+      });
+
+      document.querySelectorAll(".chip").forEach((button) => {
+        button.addEventListener("click", () => {
+          composerEl.value = button.dataset.prompt;
+          composerEl.focus();
+        });
+      });
+
+      appendMessage("buddy", "你好，我是 Buddy。你可以直接输入问题开始聊天。");
+      composerEl.focus();
+    </script>
+  </body>
+</html>

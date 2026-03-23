@@ -1,6 +1,5 @@
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from langchain_together import Together  #pip install langchain-together
 
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import (
@@ -11,6 +10,7 @@ from langchain.prompts import (
 )
 from langchain.chains import LLMChain
 import time 
+import os
 
 # Import configurations from a local module
 from api_configs.configs import get_llm_config, get_tts_config, get_asr_config
@@ -19,11 +19,34 @@ from api_configs.configs import get_llm_config, get_tts_config, get_asr_config
 llm_config = get_llm_config()
 
 
+DEFAULT_SYSTEM_PROMPT_FILE = "system_prompt.txt"
+
+
+def load_system_prompt():
+        prompt_path = os.getenv("BUD_E_SYSTEM_PROMPT_FILE", DEFAULT_SYSTEM_PROMPT_FILE)
+        with open(prompt_path, 'r') as file:
+            return file.read().strip()
+
+
+def debug_enabled():
+        value = os.getenv("BUD_E_DEBUG", "").strip().lower()
+        return value in {"1", "true", "yes", "on"}
+
+
 def get_llm(llm_config):
         model_type = llm_config['default_model']
 
-        if model_type == "together":
+        if model_type == "kimi":
+            model_config = llm_config['models'][model_type]
+            llm = ChatOpenAI(
+                temperature=model_config["temperature"],
+                model_name=model_config["model_name"],
+                openai_api_key=model_config["api_key"],
+                openai_api_base=model_config["base_url"],
+            )
+        elif model_type == "together":
             # Using the TogetherAI model
+            from langchain_together import Together
             model_config = llm_config['models'][model_type]
             llm = Together(model=model_config["model"], max_tokens=model_config["max_tokens"], together_api_key=model_config["api_key"])
         elif model_type == "groq":
@@ -52,8 +75,8 @@ class LanguageModelProcessor:
         self.memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
         # Load system prompt from a file
-        with open('system_prompt.txt', 'r') as file:
-            system_prompt = file.read().strip()
+        system_prompt = load_system_prompt()
+        self.base_system_prompt = system_prompt
         
         # Create a chat prompt template with system message, chat history, and user input
         self.prompt = ChatPromptTemplate.from_messages([
@@ -87,7 +110,8 @@ class LanguageModelProcessor:
 
         # Calculate and print elapsed time
         elapsed_time = int((end_time - start_time) * 1000)
-        print(f"LLM ({elapsed_time}ms): {response['text']}")
+        if debug_enabled():
+            print(f"LLM ({elapsed_time}ms): {response['text']}")
         return response['text']
 
     def llm_call_without_memory(self, text):
@@ -121,5 +145,8 @@ class LanguageModelProcessor:
             prompt=self.prompt,
             memory=self.memory
         )
+
+    def reset_system_prompt(self):
+        self.update_system_prompt(self.base_system_prompt)
 
         

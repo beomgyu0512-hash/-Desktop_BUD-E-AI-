@@ -4,6 +4,10 @@ import pvrecorder  # For audio recording
 import subprocess  # For running system commands
 import os  # For environment variables and file operations
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 wake_words = ["hey-buddy", "stop-buddy"]
 
