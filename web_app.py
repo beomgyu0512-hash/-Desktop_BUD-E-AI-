@@ -5,19 +5,22 @@ import uuid
 
 from flask import Flask, jsonify, render_template, request
 
-from buddy import (
+from api_configs.configs import get_llm_config
+from llm_definition import LanguageModelProcessor
+from skill_runtime import (
     conditional_execution,
     extract_opening_and_closing_tags,
-    keyword_activated_skills_dict,
-    lm_activated_skills_dict,
-    llm_config,
+    load_skill_registry,
     parse_list_of_lists,
 )
-from llm_definition import LanguageModelProcessor
 
 
 HOST = os.getenv("BUD_E_WEB_HOST", "127.0.0.1")
 PORT = int(os.getenv("BUD_E_WEB_PORT", "8000"))
+llm_config = get_llm_config()
+skill_registry = load_skill_registry("skills")
+keyword_activated_skills_dict = skill_registry.keyword_activated_skills
+lm_activated_skills_dict = skill_registry.lm_activated_skills
 
 
 class BuddyWebSession:
@@ -33,6 +36,7 @@ class BuddyWebSession:
             try:
                 condition_list = parse_list_of_lists(serialized_conditions)
                 skill_response, updated_conversation, updated_scratch_pad = conditional_execution(
+                    skill_registry.functions,
                     function_name,
                     message,
                     self.llm.conversation,
@@ -67,6 +71,7 @@ class BuddyWebSession:
 
             try:
                 skill_response, updated_conversation, updated_scratch_pad = conditional_execution(
+                    skill_registry.functions,
                     function_name,
                     message,
                     self.llm.conversation,
