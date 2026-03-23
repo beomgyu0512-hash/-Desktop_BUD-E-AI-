@@ -206,6 +206,40 @@
         font: inherit;
       }
 
+      .field {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+
+      .field label {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .field input,
+      .field textarea {
+        width: 100%;
+        min-height: 0;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: white;
+        padding: 10px 12px;
+        font: inherit;
+        color: var(--ink);
+      }
+
+      .field textarea {
+        min-height: 84px;
+      }
+
+      .hint {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
       @keyframes rise {
         from {
           opacity: 0;
@@ -271,7 +305,47 @@
           <div class="card">
             <h2>当前版本</h2>
             <p>支持浏览器文字聊天，保留 Buddy 的提示词和技能机制。</p>
-            <p>语音输入、语音播报和家长设置面板还没接入这个页面。</p>
+            <p>现在已经支持家长设置面板，保存后会写入长期记忆并影响后续回答。</p>
+          </div>
+
+          <div class="card">
+            <h2>家长设置</h2>
+
+            <div class="field">
+              <label for="child-name">孩子姓名</label>
+              <input id="child-name" type="text" placeholder="例如：Mia">
+            </div>
+
+            <div class="field">
+              <label for="child-age">年龄</label>
+              <input id="child-age" type="text" placeholder="例如：8">
+            </div>
+
+            <div class="field">
+              <label for="child-interests">兴趣</label>
+              <input id="child-interests" type="text" placeholder="用逗号分隔，例如：space, drawing">
+            </div>
+
+            <div class="field">
+              <label for="child-goals">学习目标</label>
+              <input id="child-goals" type="text" placeholder="用逗号分隔，例如：reading confidence, mental math">
+            </div>
+
+            <div class="field">
+              <label for="child-topics">最近学习主题</label>
+              <input id="child-topics" type="text" placeholder="用逗号分隔，例如：fractions, planets">
+            </div>
+
+            <div class="field">
+              <label for="parent-preferences">家长偏好</label>
+              <textarea id="parent-preferences" placeholder="例如：每次10分钟，鼓励式反馈，优先中文"></textarea>
+            </div>
+
+            <div class="actions">
+              <button id="save-profile" class="primary">保存设置</button>
+              <span id="profile-status" class="status">尚未加载</span>
+            </div>
+            <p class="hint">保存后，Buddy 会在后续回答里参考这些长期资料。</p>
           </div>
         </aside>
       </section>
@@ -283,7 +357,75 @@
       const sendEl = document.getElementById("send");
       const resetEl = document.getElementById("reset");
       const statusEl = document.getElementById("status");
+      const saveProfileEl = document.getElementById("save-profile");
+      const profileStatusEl = document.getElementById("profile-status");
+      const childNameEl = document.getElementById("child-name");
+      const childAgeEl = document.getElementById("child-age");
+      const childInterestsEl = document.getElementById("child-interests");
+      const childGoalsEl = document.getElementById("child-goals");
+      const childTopicsEl = document.getElementById("child-topics");
+      const parentPreferencesEl = document.getElementById("parent-preferences");
       const SESSION_KEY = "buddy-web-session-id";
+
+      function parseCommaList(value) {
+        return value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      function fillProfileForm(profile) {
+        childNameEl.value = profile.name || "";
+        childAgeEl.value = profile.age || "";
+        childInterestsEl.value = (profile.interests || []).join(", ");
+        childGoalsEl.value = (profile.goals || []).join(", ");
+        childTopicsEl.value = (profile.recent_topics || []).join(", ");
+        parentPreferencesEl.value = profile.parent_preferences || "";
+      }
+
+      async function loadProfile() {
+        profileStatusEl.textContent = "正在加载…";
+        try {
+          const response = await fetch("/api/profile");
+          const profile = await response.json();
+          fillProfileForm(profile);
+          profileStatusEl.textContent = "已加载";
+        } catch (error) {
+          profileStatusEl.textContent = "加载失败";
+        }
+      }
+
+      async function saveProfile() {
+        profileStatusEl.textContent = "正在保存…";
+        saveProfileEl.disabled = true;
+
+        try {
+          const response = await fetch("/api/profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: childNameEl.value.trim(),
+              age: childAgeEl.value.trim(),
+              interests: parseCommaList(childInterestsEl.value),
+              goals: parseCommaList(childGoalsEl.value),
+              recent_topics: parseCommaList(childTopicsEl.value),
+              parent_preferences: parentPreferencesEl.value.trim(),
+            }),
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || "保存失败");
+          }
+
+          fillProfileForm(payload.profile);
+          profileStatusEl.textContent = "已保存";
+        } catch (error) {
+          profileStatusEl.textContent = "保存失败";
+        } finally {
+          saveProfileEl.disabled = false;
+        }
+      }
 
       function getSessionId() {
         return window.localStorage.getItem(SESSION_KEY);
@@ -378,7 +520,10 @@
         });
       });
 
+      saveProfileEl.addEventListener("click", saveProfile);
+
       appendMessage("buddy", "你好，我是 Buddy。你可以直接输入问题开始聊天。");
+      loadProfile();
       composerEl.focus();
     </script>
   </body>

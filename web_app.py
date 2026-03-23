@@ -1,119 +1,25 @@
 import os
-import re
 import threading
 import uuid
 
 from flask import Flask, jsonify, render_template, request
 
 from api_configs.configs import get_llm_config
-from llm_definition import LanguageModelProcessor
-from skill_runtime import (
-    conditional_execution,
-    extract_opening_and_closing_tags,
-    load_skill_registry,
-    parse_list_of_lists,
-)
+from buddy_session import BuddySession
+from child_profile import load_child_profile, save_child_profile
 
 
 HOST = os.getenv("BUD_E_WEB_HOST", "127.0.0.1")
 PORT = int(os.getenv("BUD_E_WEB_PORT", "8000"))
 llm_config = get_llm_config()
-skill_registry = load_skill_registry("skills")
-keyword_activated_skills_dict = skill_registry.keyword_activated_skills
-lm_activated_skills_dict = skill_registry.lm_activated_skills
-
-
-class BuddyWebSession:
-    def __init__(self):
-        self.llm = LanguageModelProcessor(llm_config)
-        self.scratch_pad = {}
-        self.lock = threading.Lock()
-
-    def _run_keyword_skills(self, message: str) -> str:
-        all_skill_responses = []
-
-        for function_name, serialized_conditions in keyword_activated_skills_dict.items():
-            try:
-                condition_list = parse_list_of_lists(serialized_conditions)
-                skill_response, updated_conversation, updated_scratch_pad = conditional_execution(
-                    skill_registry.functions,
-                    function_name,
-                    message,
-                    self.llm.conversation,
-                    self.scratch_pad,
-                    condition_list,
-                )
-                self.llm.conversation = updated_conversation
-                self.scratch_pad = updated_scratch_pad
-                if skill_response.strip():
-                    all_skill_responses.append(skill_response.strip())
-            except Exception:
-                continue
-
-        return "\n".join(all_skill_responses).strip()
-
-    def _run_lm_skills(self, message: str, llm_response: str) -> str | None:
-        for function_name, skill_instruction in lm_activated_skills_dict.items():
-            opening_tag, closing_tag = extract_opening_and_closing_tags(skill_instruction)
-            if not opening_tag or not closing_tag:
-                continue
-            if opening_tag.lower() not in llm_response.lower():
-                continue
-            if closing_tag.lower() not in llm_response.lower():
-                continue
-
-            opening_tag_name = re.escape(opening_tag[1:-1])
-            closing_tag_name = re.escape(closing_tag[2:-1])
-            pattern = rf"<{opening_tag_name}>(.*?)</{closing_tag_name}>"
-            matches = re.findall(pattern, llm_response, flags=re.IGNORECASE | re.DOTALL)
-            if not matches:
-                continue
-
-            try:
-                skill_response, updated_conversation, updated_scratch_pad = conditional_execution(
-                    skill_registry.functions,
-                    function_name,
-                    message,
-                    self.llm.conversation,
-                    self.scratch_pad,
-                    [],
-                    matches[0].strip(),
-                )
-                self.llm.conversation = updated_conversation
-                self.scratch_pad = updated_scratch_pad
-                if skill_response.strip():
-                    return skill_response.strip()
-            except Exception:
-                continue
-
-        return None
-
-    def reply(self, message: str) -> str:
-        cleaned_message = (message or "").strip()
-        if not cleaned_message:
-            raise ValueError("message is empty")
-
-        with self.lock:
-            keyword_response = self._run_keyword_skills(cleaned_message)
-            if keyword_response:
-                return keyword_response
-
-            system_prompt = self.llm.base_system_prompt
-            for skill_instruction in lm_activated_skills_dict.values():
-                system_prompt += "\n" + skill_instruction
-            self.llm.update_system_prompt(system_prompt)
-
-            llm_response = self.llm.process(cleaned_message)
-            lm_skill_response = self._run_lm_skills(cleaned_message, llm_response)
-            return lm_skill_response or llm_response
 
 
 app = Flask(__name__)
-sessions: dict[str, BuddyWebSession] = {}
+sessions: dict[str, BuddySession] = {}
 sessions_lock = threading.Lock()
 
 
-def get_session(session_id: str | None) -> tuple[str, BuddyWebSession]:
+def get_session(session_id: str | None) -> tuple[str, BuddySession]:
     if session_id:
         with sessions_lock:
             existing_session = sessions.get(session_id)
@@ -121,10 +27,21 @@ def get_session(session_id: str | None) -> tuple[str, BuddyWebSession]:
             return session_id, existing_session
 
     new_session_id = uuid.uuid4().hex
-    new_session = BuddyWebSession()
+    new_session = BuddySession()
     with sessions_lock:
         sessions[new_session_id] = new_session
     return new_session_id, new_session
+
+
+def normalize_profile_payload(payload: dict) -> dict:
+    return {
+        "name": (payload.get("name") or "").strip(),
+        "age": (payload.get("age") or "").strip(),
+        "interests": [item.strip() for item in (payload.get("interests") or []) if item.strip()],
+        "goals": [item.strip() for item in (payload.get("goals") or []) if item.strip()],
+        "recent_topics": [item.strip() for item in (payload.get("recent_topics") or []) if item.strip()],
+        "parent_preferences": (payload.get("parent_preferences") or "").strip(),
+    }
 
 
 @app.get("/")
@@ -135,6 +52,24 @@ def index():
 @app.get("/api/health")
 def health():
     return jsonify({"ok": True, "provider": llm_config["default_model"]})
+
+
+@app.get("/api/profile")
+def get_profile():
+    return jsonify(load_child_profile())
+
+
+@app.post("/api/profile")
+def update_profile():
+    payload = request.get_json(silent=True) or {}
+    profile = normalize_profile_payload(payload)
+    saved_profile = save_child_profile(profile)
+
+    with sessions_lock:
+        for session in sessions.values():
+            session.refresh_child_profile()
+
+    return jsonify({"ok": True, "profile": saved_profile})
 
 
 @app.post("/api/chat")

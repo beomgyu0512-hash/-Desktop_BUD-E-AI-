@@ -93,6 +93,16 @@ Optional environment variables:
 
 The current web version is text-only. It reuses the same prompt and skill pipeline as the terminal flow, including local keyword skills such as telling the current time.
 
+It now also includes a parent settings panel that edits the persistent child profile directly from the browser.
+The panel can update:
+
+- child name
+- age
+- interests
+- learning goals
+- recent topics
+- parent preferences
+
 To let other devices on the same local network open it:
 ```sh
 BUD_E_WEB_HOST=0.0.0.0 python3 web_app.py
@@ -101,6 +111,17 @@ BUD_E_WEB_HOST=0.0.0.0 python3 web_app.py
 Then open `http://YOUR_LAN_IP:8000` from another device on the same Wi-Fi.
 
 For deployment notes, see `docs/deployment.md`.
+
+## Desktop App
+
+This fork also includes a minimal PySide6 desktop client for local text chat.
+
+Start it with:
+```sh
+python3 desktop_app.py
+```
+
+The desktop app reuses the same session, prompt, and skill pipeline as the web version, but runs as a local native window.
 
 ## Default LLM provider
 
@@ -111,6 +132,29 @@ Required environment variables:
 - `MOONSHOT_API_KEY`
 - `KIMI_BASE_URL` defaults to `https://api.moonshot.cn/v1`
 - `KIMI_MODEL` defaults to `moonshot-v1-8k`
+
+## Long-term child memory
+
+This fork now includes a minimal persistent child profile stored in:
+
+- `child_profile.json`
+
+The shared Buddy session injects this memory into the system prompt for personalization.
+
+Current profile fields:
+
+- `name`
+- `age`
+- `interests`
+- `goals`
+- `recent_topics`
+- `parent_preferences`
+
+You can move the file by setting:
+
+- `BUD_E_CHILD_PROFILE_FILE`
+
+The browser-based parent settings panel reads and writes this file through `/api/profile`.
 
 ## Skills
 

@@ -55,11 +55,44 @@ If you want other people to try Buddy without using the terminal, you can run th
 2. Open `http://127.0.0.1:8000` in a browser.
 
 The current web UI supports text chat only. It keeps per-browser-session conversation memory in the Flask process and reuses the same prompt and skill pipeline as the terminal mode.
+It also includes a parent settings panel that saves long-term child profile data to `child_profile.json`.
 
 ## Current child-focused skills
 
 - `explain_for_child`
 - `create_study_plan`
 - `study_plan_keyword_skill`
+- `update_child_profile`
+- `child_profile_keyword_skill`
 
 These are intentionally lightweight. They are meant to establish a safe project structure before adding subject-specific lesson skills.
+
+## Minimal long-term memory
+
+This project now stores a simple persistent child profile in `child_profile.json`.
+
+Stored fields:
+
+- `name`
+- `age`
+- `interests`
+- `goals`
+- `recent_topics`
+- `parent_preferences`
+
+The shared Buddy session loads this file and injects it into the system prompt so web and desktop sessions can personalize replies consistently.
+
+You can override the file path with:
+
+- `BUD_E_CHILD_PROFILE_FILE`
+
+In the browser, these fields can now be edited directly from the parent settings panel instead of only through chat commands.
+
+## Tool results and child-friendly wording
+
+The shared Buddy session now supports a two-step response flow for keyword skills:
+
+1. A local skill can provide factual output first.
+2. The LLM then rewrites that factual result into child-friendly Chinese while keeping the tool result accurate.
+
+If the LLM call fails, Buddy falls back to the original tool result.
