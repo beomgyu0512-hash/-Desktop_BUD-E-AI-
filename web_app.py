@@ -2,6 +2,7 @@ import os
 import threading
 import uuid
 
+from analytics_logger import log_event
 from flask import Flask, jsonify, render_template, request
 
 from api_configs.configs import get_llm_config
@@ -28,9 +29,10 @@ def get_session(session_id: str | None) -> tuple[str, BuddySession]:
             return session_id, existing_session
 
     new_session_id = uuid.uuid4().hex
-    new_session = BuddySession()
+    new_session = BuddySession(session_id=new_session_id, channel="web")
     with sessions_lock:
         sessions[new_session_id] = new_session
+    log_event("session_started", {"session_id": new_session_id, "channel": "web"})
     return new_session_id, new_session
 
 
@@ -72,8 +74,22 @@ def get_profile():
 @app.post("/api/profile")
 def update_profile():
     payload = request.get_json(silent=True) or {}
-    profile = normalize_profile_payload(payload, load_child_profile())
+    previous_profile = load_child_profile()
+    profile = normalize_profile_payload(payload, previous_profile)
     saved_profile = save_child_profile(profile)
+    changed_fields = [
+        field
+        for field in ["name", "age", "interests", "goals", "recent_topics", "parent_preferences"]
+        if previous_profile.get(field) != saved_profile.get(field)
+    ]
+    log_event(
+        "profile_update",
+        {
+            "channel": "web",
+            "child_id": saved_profile.get("child_id"),
+            "changed_fields": changed_fields,
+        },
+    )
 
     with sessions_lock:
         for session in sessions.values():
@@ -92,10 +108,15 @@ def chat():
         return jsonify({"error": "message is required"}), 400
 
     session_id, session = get_session(session_id)
+    log_event("chat_request", {"session_id": session_id, "channel": "web", "message": message})
 
     try:
         reply = session.reply(message)
     except Exception as exc:
+        log_event(
+            "chat_error",
+            {"session_id": session_id, "channel": "web", "message": message, "error": str(exc)},
+        )
         return jsonify({"error": str(exc), "session_id": session_id}), 500
 
     return jsonify({"reply": reply, "session_id": session_id})
@@ -110,6 +131,7 @@ def reset():
 
     with sessions_lock:
         sessions.pop(session_id, None)
+    log_event("session_reset", {"session_id": session_id, "channel": "web"})
 
     return jsonify({"ok": True})
 

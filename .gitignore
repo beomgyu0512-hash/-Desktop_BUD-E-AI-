@@ -160,3 +160,5 @@ cython_debug/
 #.idea/
 
 scratch
+README_for_teacher.html
+analytics/*.jsonl

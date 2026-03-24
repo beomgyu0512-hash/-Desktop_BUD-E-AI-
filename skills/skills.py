@@ -12,6 +12,8 @@ import subprocess
 import time 
 
 import sys
+from urllib.parse import unquote, urlparse
+from pathlib import Path
 
 try:
     import clipboard
@@ -426,17 +428,164 @@ def print_twinkling_star(transcription_response, conversation, scratch_pad, LMGe
 
 
 
+def launch_with_default_app(target):
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", target])
+        return
+
+    if os.name == "nt":
+        os.startfile(target)
+        return
+
+    subprocess.Popen(["xdg-open", target])
+
+
 def open_site(url):
-    # Use subprocess.Popen to open the browser
-    process = subprocess.Popen(['xdg-open', url])
-    
-    # Wait for 2 seconds
-    time.sleep(1)
-    
-    # Kill the process
-    process.terminate()  # Safely terminate the process
-    # If terminate doesn't kill the process, you can use kill():
-    # process.kill()
+    launch_with_default_app(url)
+
+
+def normalize_local_path(raw_path):
+    candidate = (raw_path or "").strip().strip('"').strip("'")
+    if not candidate:
+        return None
+
+    if candidate.startswith("file://"):
+        parsed = urlparse(candidate)
+        candidate = unquote(parsed.path)
+
+    candidate = os.path.expanduser(candidate)
+
+    if not os.path.isabs(candidate):
+        candidate = os.path.abspath(candidate)
+
+    if not os.path.exists(candidate):
+        return None
+
+    return candidate
+
+
+def describe_local_target(path):
+    if os.path.isdir(path):
+        return "文件夹"
+
+    extension = os.path.splitext(path)[1].lower()
+    if extension in {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}:
+        return "视频"
+    if extension in {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}:
+        return "音频"
+    return "文件"
+
+
+def get_downloads_directory():
+    return os.path.expanduser("~/Downloads")
+
+
+def media_extensions_for_kind(media_kind):
+    if media_kind == "video":
+        return {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
+    if media_kind == "audio":
+        return {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
+    return set()
+
+
+def infer_media_kind_from_text(text):
+    normalized = (text or "").lower()
+    if any(token in normalized for token in ["视频", "影片", "movie", "video"]):
+        return "video"
+    if any(token in normalized for token in ["音频", "音乐", "歌曲", "录音", "audio", "music", "song"]):
+        return "audio"
+    if any(token in normalized for token in ["文件夹", "folder", "directory"]):
+        return "folder"
+    return "file"
+
+
+def extract_search_terms(text):
+    normalized = (text or "").strip().lower()
+    stop_tokens = [
+        "打开", "本地", "最近", "下载", "的", "一个", "一下", "帮我", "请", "视频", "音频", "文件",
+        "文件夹", "路径", "latest", "recent", "download", "downloads", "video", "audio", "file", "folder",
+    ]
+    tokens = re.split(r"[\s,，;；/]+", normalized)
+    return [token for token in tokens if token and token not in stop_tokens]
+
+
+def find_recent_download(media_kind="file", query_text=""):
+    downloads_dir = Path(get_downloads_directory())
+    if not downloads_dir.exists():
+        return None
+
+    extensions = media_extensions_for_kind(media_kind)
+    candidates = []
+    for entry in downloads_dir.iterdir():
+        if entry.name.startswith("."):
+            continue
+        if media_kind == "folder":
+            if not entry.is_dir():
+                continue
+        elif media_kind in {"video", "audio"}:
+            if not entry.is_file() or entry.suffix.lower() not in extensions:
+                continue
+        else:
+            if not entry.exists():
+                continue
+
+        try:
+            modified_time = entry.stat().st_mtime
+        except OSError:
+            continue
+        candidates.append((modified_time, entry))
+
+    if not candidates:
+        return None
+
+    search_terms = extract_search_terms(query_text)
+    candidates.sort(key=lambda item: item[0], reverse=True)
+
+    if search_terms:
+        filtered = []
+        for modified_time, entry in candidates:
+            name = entry.name.lower()
+            if all(term in name for term in search_terms):
+                filtered.append((modified_time, entry))
+        if filtered:
+            candidates = filtered
+
+    return str(candidates[0][1])
+
+
+def choose_local_path(selection_type="file"):
+    if sys.platform == "darwin":
+        if selection_type == "folder":
+            script = 'POSIX path of (choose folder with prompt "请选择要打开的文件夹")'
+        else:
+            script = 'POSIX path of (choose file with prompt "请选择要打开的文件")'
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            selected = result.stdout.strip()
+            return normalize_local_path(selected)
+        except Exception:
+            return None
+
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        root.update()
+        if selection_type == "folder":
+            selected = filedialog.askdirectory(title="请选择要打开的文件夹")
+        else:
+            selected = filedialog.askopenfilename(title="请选择要打开的文件")
+        root.destroy()
+        return normalize_local_path(selected)
+    except Exception:
+        return None
     
 def extract_urls_to_open(input_string):
     # Define a regular expression pattern to find URLs within <open-url> tags
@@ -446,6 +595,83 @@ def extract_urls_to_open(input_string):
     urls = re.findall(pattern, input_string)
     
     return urls
+
+
+# LM ACTIVATED SKILL: SKILL TITLE: Open Local Path DESCRIPTION: Opens a local file, audio file, video file, or folder on the current computer using the default system app. USAGE INSTRUCTIONS: To use this skill, call it with the following tags: <open-local-path> /absolute/path/to/file </open-local-path> Example: <open-local-path> /Users/name/Movies/lesson.mp4 </open-local-path>
+def open_local_path(transcription_response, conversation, scratch_pad, path_to_open):
+    normalized_path = normalize_local_path(path_to_open)
+    if not normalized_path:
+        skill_response = (
+            "我没有找到要打开的本地路径。请提供存在的本地文件、音频、视频或文件夹路径。"
+        )
+        return skill_response, conversation, scratch_pad
+
+    launch_with_default_app(normalized_path)
+    target_type = describe_local_target(normalized_path)
+    skill_response = f"我已经帮你打开这个本地{target_type}：{normalized_path}"
+    return skill_response, conversation, scratch_pad
+
+
+# KEYWORD ACTIVATED SKILL: [["打开本地视频"], ["打开本地音频"], ["打开路径"], ["打开本地文件"], ["打开文件夹"]]
+def open_local_path_from_clipboard(transcription_response, conversation, scratch_pad, LMGeneratedParameters=""):
+    if clipboard is None:
+        skill_response = "当前环境不支持读取剪贴板。请直接把本地路径发给我。"
+        return skill_response, conversation, scratch_pad
+
+    clipboard_content = clipboard.paste()
+    normalized_path = normalize_local_path(clipboard_content)
+    if not normalized_path:
+        skill_response = (
+            "我还没有在剪贴板里找到可打开的本地路径。你可以先复制文件路径，再让我打开本地视频、音频或文件夹。"
+        )
+        return skill_response, conversation, scratch_pad
+
+    launch_with_default_app(normalized_path)
+    target_type = describe_local_target(normalized_path)
+    skill_response = f"我已经从剪贴板路径打开这个本地{target_type}：{normalized_path}"
+    return skill_response, conversation, scratch_pad
+
+
+# LM ACTIVATED SKILL: SKILL TITLE: Open Recent Download DESCRIPTION: Finds and opens the most recent downloaded local video, audio file, file, or folder from the Downloads directory. USAGE INSTRUCTIONS: To use this skill, call it with the following tags: <open-recent-download> video </open-recent-download> Example: <open-recent-download> 最近下载的视频 </open-recent-download>
+def open_recent_download(transcription_response, conversation, scratch_pad, request_text):
+    request = (request_text or transcription_response or "").strip()
+    media_kind = infer_media_kind_from_text(request)
+    normalized_kind = "file" if media_kind not in {"video", "audio", "folder"} else media_kind
+    target_path = find_recent_download(normalized_kind, request)
+    if not target_path:
+        skill_response = "我没有在下载目录里找到符合条件的最近文件。你可以换一个说法，或者直接让我打开本地路径。"
+        return skill_response, conversation, scratch_pad
+
+    launch_with_default_app(target_path)
+    target_type = describe_local_target(target_path)
+    skill_response = f"我已经帮你打开最近下载的这个{target_type}：{target_path}"
+    return skill_response, conversation, scratch_pad
+
+
+# KEYWORD ACTIVATED SKILL: [["最近下载的视频"], ["最近下载的音频"], ["最近下载的文件"], ["最近下载的文件夹"]]
+def open_recent_download_keyword_skill(transcription_response, conversation, scratch_pad, LMGeneratedParameters=""):
+    return open_recent_download(transcription_response, conversation, scratch_pad, transcription_response)
+
+
+# LM ACTIVATED SKILL: SKILL TITLE: Choose Local File DESCRIPTION: Opens a native file picker on the local computer and then opens the selected file or folder using the default system app. USAGE INSTRUCTIONS: To use this skill, call it with the following tags: <choose-local-file> file </choose-local-file> Example: <choose-local-file> folder </choose-local-file>
+def choose_and_open_local_path(transcription_response, conversation, scratch_pad, request_text):
+    request = (request_text or transcription_response or "").strip()
+    selection_type = infer_media_kind_from_text(request)
+    selection_type = "folder" if selection_type == "folder" else "file"
+    selected_path = choose_local_path(selection_type)
+    if not selected_path:
+        skill_response = "我没有拿到要打开的本地路径。可能是你取消了选择，或者当前环境不支持文件选择器。"
+        return skill_response, conversation, scratch_pad
+
+    launch_with_default_app(selected_path)
+    target_type = describe_local_target(selected_path)
+    skill_response = f"我已经通过文件选择器打开这个本地{target_type}：{selected_path}"
+    return skill_response, conversation, scratch_pad
+
+
+# KEYWORD ACTIVATED SKILL: [["选择文件"], ["选择视频"], ["选择音频"], ["选择文件夹"], ["打开文件选择器"]]
+def choose_and_open_local_path_keyword_skill(transcription_response, conversation, scratch_pad, LMGeneratedParameters=""):
+    return choose_and_open_local_path(transcription_response, conversation, scratch_pad, transcription_response)
 
 # LM ACTIVATED SKILL: SKILL TITLE: Review scientific literature. DESCRIPTION: Sends a question to the Ask Open Research Knowledge Graph Service that retrieves relevant abstracts from 76+ million scientific papers. USAGE INSTRUCTIONS: Whenever the user asks you to review the scientific literature for a certain question, you reply with the question inside the tags <open-askorkg> ... </open-askorkg>, like e.g. if the user asks you to review the scientific literature for the question 'Is it possible to cure aging?', you output only: <open-askorkg>Is it possible to cure aging?</open-askorkg> and nothing more.
 def send_question_to_askorkg(transcription_response, conversation, scratch_pad, question_for_askorkg):

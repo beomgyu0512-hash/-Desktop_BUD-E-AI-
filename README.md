@@ -20,6 +20,7 @@
 - 用家长设置面板保存孩子资料
 - 根据孩子档案调整后续回答
 - 通过本地技能回答时间、生成学习计划、做儿童化解释
+- 在本机用系统默认应用打开本地音频、视频、文件或文件夹
 - 在代码层为后续 `mem0` 动态记忆接入做好准备
 
 当前项目更适合：
@@ -35,6 +36,34 @@
   - 在儿童使用时的适配性
   - 实现家长通过自然语言对话设置和核对需求
 - 实现桌面客户端部署
+
+## 本地文件打开
+
+Buddy 现在支持在本机打开本地路径。
+
+支持对象：
+
+- 音频文件
+- 视频文件
+- 普通文件
+- 文件夹
+
+还支持：
+
+- 自然语言打开最近下载的视频、音频、文件或文件夹
+- 打开原生文件选择器，再打开你选中的文件或文件夹
+
+触发方式：
+
+- LM 技能直接提供路径
+- 先复制路径，再通过“打开本地视频 / 打开本地音频 / 打开路径 / 打开文件夹”这类关键词触发
+- 直接说“打开最近下载的视频 / 打开最近下载的音频 / 打开最近下载的文件”
+- 直接说“选择文件 / 选择视频 / 选择音频 / 选择文件夹”
+
+平台行为：
+
+- macOS 使用系统 `open`
+- Linux 使用 `xdg-open`
 
 ## 当前入口
 
@@ -178,6 +207,30 @@ python3 desktop_app.py
 
 规则实现见：
 [dynamic_memory_rules.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/dynamic_memory_rules.py)
+
+## 本地分析日志
+
+项目现在会把关键事件写入本地结构化日志：
+
+- 默认路径：`analytics/events.jsonl`
+
+每一行都是一条 JSON，便于后续统计。
+
+当前会记录：
+
+- `session_started`
+- `chat_request`
+- `chat_turn`
+- `chat_error`
+- `profile_update`
+- `session_reset`
+- `memory_recall`
+- `memory_capture_decision`
+- `memory_capture`
+
+如果你想改路径，可以设置：
+
+- `BUD_E_ANALYTICS_FILE`
 
 ## 主要文件
 

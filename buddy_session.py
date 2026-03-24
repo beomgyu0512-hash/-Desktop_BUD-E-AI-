@@ -2,6 +2,7 @@ import os
 import re
 import threading
 
+from analytics_logger import log_event
 from api_configs.configs import get_llm_config
 from child_profile import format_child_profile_for_prompt, load_child_profile, save_child_profile
 from dynamic_memory import format_dynamic_memories_for_prompt, get_dynamic_memory_adapter
@@ -25,11 +26,13 @@ def debug_enabled() -> bool:
 
 
 class BuddySession:
-    def __init__(self):
+    def __init__(self, session_id: str | None = None, channel: str = "local"):
         self.llm = LanguageModelProcessor(llm_config)
         self.scratch_pad = {"child_profile": load_child_profile()}
         self.dynamic_memory = get_dynamic_memory_adapter()
         self.lock = threading.Lock()
+        self.session_id = session_id
+        self.channel = channel
 
     def _build_system_prompt(self, relevant_memories=None) -> str:
         profile = self.scratch_pad.get("child_profile", load_child_profile())
@@ -62,7 +65,19 @@ class BuddySession:
         child_id = child_profile.get("child_id", "default_child")
 
         try:
-            return self.dynamic_memory.search(query=message, user_id=child_id, limit=3)
+            memories = self.dynamic_memory.search(query=message, user_id=child_id, limit=3)
+            log_event(
+                "memory_recall",
+                {
+                    "session_id": self.session_id,
+                    "channel": self.channel,
+                    "child_id": child_id,
+                    "provider": self.dynamic_memory.provider_name,
+                    "query": message,
+                    "results_count": len(memories),
+                },
+            )
+            return memories
         except Exception:
             return []
 
@@ -70,6 +85,19 @@ class BuddySession:
         child_profile = self.get_child_profile()
         child_id = child_profile.get("child_id", "default_child")
         decision = evaluate_dynamic_memory_capture(user_message, assistant_message)
+        log_event(
+            "memory_capture_decision",
+            {
+                "session_id": self.session_id,
+                "channel": self.channel,
+                "child_id": child_id,
+                "provider": self.dynamic_memory.provider_name,
+                "should_store": decision.should_store,
+                "reason": decision.reason,
+                "user_message": decision.user_message,
+                "assistant_message": decision.assistant_message,
+            },
+        )
 
         if debug_enabled():
             print(f"Dynamic memory capture decision: {decision.reason} (store={decision.should_store})")
@@ -82,6 +110,16 @@ class BuddySession:
                 user_id=child_id,
                 user_message=decision.user_message,
                 assistant_message=decision.assistant_message,
+            )
+            log_event(
+                "memory_capture",
+                {
+                    "session_id": self.session_id,
+                    "channel": self.channel,
+                    "child_id": child_id,
+                    "provider": self.dynamic_memory.provider_name,
+                    "reason": decision.reason,
+                },
             )
         except Exception:
             return
@@ -163,18 +201,56 @@ class BuddySession:
             keyword_response = self._run_keyword_skills(cleaned_message)
             relevant_memories = self._search_dynamic_memories(cleaned_message)
             self.llm.update_system_prompt(self._build_system_prompt(relevant_memories))
+            child_id = self.get_child_profile().get("child_id", "default_child")
 
             if keyword_response:
                 try:
                     final_response = self.llm.process(self._build_tool_result_prompt(cleaned_message, keyword_response))
+                    log_event(
+                        "chat_turn",
+                        {
+                            "session_id": self.session_id,
+                            "channel": self.channel,
+                            "child_id": child_id,
+                            "user_message": cleaned_message,
+                            "assistant_message": final_response,
+                            "keyword_skill_response": keyword_response,
+                            "dynamic_memory_results": len(relevant_memories),
+                            "response_source": "keyword_skill_plus_llm",
+                        },
+                    )
                     self._capture_dynamic_memory(cleaned_message, final_response)
                     return final_response
                 except Exception:
+                    log_event(
+                        "chat_turn",
+                        {
+                            "session_id": self.session_id,
+                            "channel": self.channel,
+                            "child_id": child_id,
+                            "user_message": cleaned_message,
+                            "assistant_message": keyword_response,
+                            "dynamic_memory_results": len(relevant_memories),
+                            "response_source": "keyword_skill_only",
+                        },
+                    )
                     self._capture_dynamic_memory(cleaned_message, keyword_response)
                     return keyword_response
 
             llm_response = self.llm.process(cleaned_message)
             lm_skill_response = self._run_lm_skills(cleaned_message, llm_response)
             final_response = lm_skill_response or llm_response
+            log_event(
+                "chat_turn",
+                {
+                    "session_id": self.session_id,
+                    "channel": self.channel,
+                    "child_id": child_id,
+                    "user_message": cleaned_message,
+                    "assistant_message": final_response,
+                    "dynamic_memory_results": len(relevant_memories),
+                    "response_source": "lm_skill" if lm_skill_response else "llm",
+                },
+            )
             self._capture_dynamic_memory(cleaned_message, final_response)
             return final_response
