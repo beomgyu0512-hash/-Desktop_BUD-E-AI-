@@ -9,12 +9,11 @@ def explain_for_child(transcription_response, conversation, scratch_pad, LMGener
     request = (LMGeneratedParameters or transcription_response or "").strip()
     request = " ".join(request.split())
     if not request:
-        request = "the topic the child just asked about"
+        request = "刚才孩子提到的话题"
 
     skill_response = (
-        f"Let's learn about {request}. "
-        "I will explain it simply, give one everyday example, "
-        "and end with one short check question."
+        f"我们一起来学“{request}”。"
+        "我会先用简单的话解释，再举一个生活里的小例子，最后给一个很短的小问题帮助理解。"
     )
     return skill_response, conversation, scratch_pad
 
@@ -24,12 +23,11 @@ def create_study_plan(transcription_response, conversation, scratch_pad, LMGener
     request = (LMGeneratedParameters or transcription_response or "").strip()
     request = " ".join(request.split())
     if not request:
-        request = "topic: learning practice; age: child; duration: 10 minutes"
+        request = "主题：学习练习；年龄：儿童；时长：10分钟"
 
     skill_response = (
-        f"Here is a short child-friendly study plan for {request}. "
-        "Start with one warm-up question, teach the core idea in two small steps, "
-        "do two practice prompts, then finish with a recap."
+        f"下面是一份适合孩子的简短学习计划：{request}。"
+        "先用一个热身小问题开始，再分两小步讲清核心知识，接着做两次练习，最后用一句话复盘。"
     )
     return skill_response, conversation, scratch_pad
 
@@ -44,8 +42,8 @@ def tell_current_time(transcription_response, conversation, scratch_pad, LMGener
 # KEYWORD ACTIVATED SKILL: [["study plan"], ["learning plan"], ["practice with me"]]
 def study_plan_keyword_skill(transcription_response, conversation, scratch_pad, LMGeneratedParameters=""):
     skill_response = (
-        "I can help build a short learning plan. "
-        "Tell me the topic, the child's age, and how many minutes you want."
+        "我可以帮你生成一个简短学习计划。"
+        "告诉我学习主题、孩子年龄和希望学习多少分钟就可以了。"
     )
     return skill_response, conversation, scratch_pad
 
@@ -99,6 +97,6 @@ def update_child_profile(transcription_response, conversation, scratch_pad, LMGe
 def child_profile_keyword_skill(transcription_response, conversation, scratch_pad, LMGeneratedParameters=""):
     skill_response = (
         "你可以告诉我孩子的长期信息，比如：姓名、年龄、兴趣、学习目标、最近在学什么、家长偏好。"
-        "例如：更新孩子资料 name: Mia; age: 8; interests: space, drawing; goals: reading confidence"
+        "例如：更新孩子资料 name: 小雨; age: 8; interests: 太空, 画画; goals: 提高阅读信心"
     )
     return skill_response, conversation, scratch_pad

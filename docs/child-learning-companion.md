@@ -30,6 +30,22 @@ The project is configured to use Kimi by default.
 - `KIMI_BASE_URL` defaults to `https://api.moonshot.cn/v1`.
 - `KIMI_MODEL` defaults to `moonshot-v1-8k`.
 
+## Default Chinese behavior
+
+The child-facing experience is now Chinese-first by default:
+
+- the child system prompt defaults to simplified Chinese
+- the browser UI and parent settings examples use Chinese
+- child skills return Chinese text by default
+- ASR defaults to Deepgram `nova-2` with `zh-CN`
+
+Current audio limitation:
+
+- Deepgram ASR supports Mandarin Chinese (`zh-CN`)
+- Deepgram Aura TTS does not currently list Chinese as a supported language
+
+So the project now defaults to Chinese understanding and Chinese text responses, but spoken Chinese output still requires either a different TTS provider or a future TTS swap.
+
 ## Running without wake words
 
 If Porcupine is not configured yet, you can skip wake word detection during development:
@@ -87,6 +103,54 @@ You can override the file path with:
 - `BUD_E_CHILD_PROFILE_FILE`
 
 In the browser, these fields can now be edited directly from the parent settings panel instead of only through chat commands.
+
+## Two-layer memory design
+
+Buddy now separates memory into two roles:
+
+1. `child_profile.json`
+   This stores stable, parent-controlled facts such as age, goals, and preferences.
+   It should be treated as the source of truth.
+
+2. Dynamic memory adapter
+   This is the conversation-derived memory layer used for recall and capture around each turn.
+   It is wired through `dynamic_memory.py`.
+
+The current default dynamic memory provider is `none`, which means no extra recall/capture happens yet.
+The session architecture is already prepared for a future Mem0 integration without replacing the child profile layer.
+
+Recommended rule:
+
+- keep identity, age, goals, and parent preferences in `child_profile.json`
+- use Mem0-style dynamic memory only for conversation-derived patterns such as recent struggles, favorite explanation styles, and recurring topics
+
+Environment variables for this layer:
+
+- `BUD_E_DYNAMIC_MEMORY_PROVIDER`
+- `BUD_E_MEM0_MODE`
+- `MEM0_API_KEY`
+
+## Dynamic memory capture rules
+
+Before a turn is sent to the dynamic memory adapter, Buddy now runs a rule layer in `dynamic_memory_rules.py`.
+
+The current rules prefer to store:
+
+- stable preferences
+- recurring learning difficulties
+- summarized learning outcomes and progress trends
+- explanation-style preferences
+- recent learning themes
+- useful parent guidance
+
+The current rules avoid storing:
+
+- sensitive personal data
+- clearly temporary utility requests like asking for the current time
+- raw item-by-item exercise logs
+- empty, generic, or very short exchanges
+
+If `BUD_E_DEBUG=1` is enabled, Buddy prints the capture decision reason for each turn.
 
 ## Tool results and child-friendly wording
 

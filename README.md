@@ -133,6 +133,26 @@ Required environment variables:
 - `KIMI_BASE_URL` defaults to `https://api.moonshot.cn/v1`
 - `KIMI_MODEL` defaults to `moonshot-v1-8k`
 
+## Default Chinese behavior
+
+This fork now defaults to Chinese-first interaction for child-facing flows:
+
+- the child prompt defaults to simplified Chinese answers
+- browser UI examples and parent settings defaults are in Chinese
+- child skills such as study plans and explanations return Chinese text by default
+- Deepgram ASR now defaults to `zh-CN`
+
+Audio note:
+
+- Deepgram `nova-2` supports Mandarin Chinese ASR (`zh-CN`) according to the official model/language table
+- Deepgram Aura TTS does not currently list Chinese among its supported languages, so the default TTS model remains an English Aura voice unless you swap TTS providers
+
+Useful environment variables:
+
+- `DEEPGRAM_ASR_MODEL` defaults to `nova-2`
+- `DEEPGRAM_ASR_LANGUAGE` defaults to `zh-CN`
+- `DEEPGRAM_TTS_MODEL` defaults to `aura-helios-en`
+
 ## Long-term child memory
 
 This fork now includes a minimal persistent child profile stored in:
@@ -155,6 +175,45 @@ You can move the file by setting:
 - `BUD_E_CHILD_PROFILE_FILE`
 
 The browser-based parent settings panel reads and writes this file through `/api/profile`.
+
+## Dual-memory architecture
+
+Buddy now uses a two-layer memory design:
+
+- `child_profile.json` is the source of truth for stable child identity and parent-controlled settings
+- the dynamic memory layer is a pluggable recall/capture adapter for conversation-derived memories
+
+Current status:
+
+- the child profile layer is active now
+- the dynamic memory layer is wired in through `dynamic_memory.py`
+- dynamic memory capture is filtered by `dynamic_memory_rules.py`
+- the default provider is `none`, which safely disables dynamic recall/capture
+- a future `mem0` integration can be enabled without changing the main Buddy session flow
+
+Relevant environment variables:
+
+- `BUD_E_CHILD_PROFILE_FILE`
+- `BUD_E_DYNAMIC_MEMORY_PROVIDER` with `none` or `mem0`
+- `BUD_E_MEM0_MODE` with `platform` or `open-source`
+- `MEM0_API_KEY` when using Mem0 cloud
+- `MEM0_DIR` for Mem0 local state; defaults to `.mem0` inside the project directory in this fork
+
+Dynamic memory capture rules currently try to store:
+
+- stable learning preferences
+- recurring struggles
+- summarized learning outcomes and progress trends
+- preferred explanation styles
+- recent learning topics
+- parent-guided teaching preferences
+
+They currently avoid storing:
+
+- sensitive personal data
+- clearly ephemeral utility requests such as asking for the current time
+- raw exercise logs such as item-by-item question results
+- generic acknowledgments and low-value chatter
 
 ## Skills
 

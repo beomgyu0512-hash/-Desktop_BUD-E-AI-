@@ -1,8 +1,11 @@
+import os
 import re
 import threading
 
 from api_configs.configs import get_llm_config
 from child_profile import format_child_profile_for_prompt, load_child_profile, save_child_profile
+from dynamic_memory import format_dynamic_memories_for_prompt, get_dynamic_memory_adapter
+from dynamic_memory_rules import evaluate_dynamic_memory_capture
 from llm_definition import LanguageModelProcessor
 from skill_runtime import (
     conditional_execution,
@@ -16,16 +19,23 @@ llm_config = get_llm_config()
 skill_registry = load_skill_registry("skills")
 
 
+def debug_enabled() -> bool:
+    value = os.getenv("BUD_E_DEBUG", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 class BuddySession:
     def __init__(self):
         self.llm = LanguageModelProcessor(llm_config)
         self.scratch_pad = {"child_profile": load_child_profile()}
+        self.dynamic_memory = get_dynamic_memory_adapter()
         self.lock = threading.Lock()
 
-    def _build_system_prompt(self) -> str:
+    def _build_system_prompt(self, relevant_memories=None) -> str:
         profile = self.scratch_pad.get("child_profile", load_child_profile())
         system_prompt = self.llm.base_system_prompt
         system_prompt += format_child_profile_for_prompt(profile)
+        system_prompt += format_dynamic_memories_for_prompt(relevant_memories or [])
         for skill_instruction in skill_registry.lm_activated_skills.values():
             system_prompt += "\n" + skill_instruction
         return system_prompt
@@ -46,6 +56,35 @@ class BuddySession:
         saved_profile = save_child_profile(profile)
         self.scratch_pad["child_profile"] = saved_profile
         return saved_profile
+
+    def _search_dynamic_memories(self, message: str):
+        child_profile = self.get_child_profile()
+        child_id = child_profile.get("child_id", "default_child")
+
+        try:
+            return self.dynamic_memory.search(query=message, user_id=child_id, limit=3)
+        except Exception:
+            return []
+
+    def _capture_dynamic_memory(self, user_message: str, assistant_message: str):
+        child_profile = self.get_child_profile()
+        child_id = child_profile.get("child_id", "default_child")
+        decision = evaluate_dynamic_memory_capture(user_message, assistant_message)
+
+        if debug_enabled():
+            print(f"Dynamic memory capture decision: {decision.reason} (store={decision.should_store})")
+
+        if not decision.should_store:
+            return
+
+        try:
+            self.dynamic_memory.capture_turn(
+                user_id=child_id,
+                user_message=decision.user_message,
+                assistant_message=decision.assistant_message,
+            )
+        except Exception:
+            return
 
     def _run_keyword_skills(self, message: str) -> str:
         all_skill_responses = []
@@ -122,14 +161,20 @@ class BuddySession:
 
         with self.lock:
             keyword_response = self._run_keyword_skills(cleaned_message)
-            self.llm.update_system_prompt(self._build_system_prompt())
+            relevant_memories = self._search_dynamic_memories(cleaned_message)
+            self.llm.update_system_prompt(self._build_system_prompt(relevant_memories))
 
             if keyword_response:
                 try:
-                    return self.llm.process(self._build_tool_result_prompt(cleaned_message, keyword_response))
+                    final_response = self.llm.process(self._build_tool_result_prompt(cleaned_message, keyword_response))
+                    self._capture_dynamic_memory(cleaned_message, final_response)
+                    return final_response
                 except Exception:
+                    self._capture_dynamic_memory(cleaned_message, keyword_response)
                     return keyword_response
 
             llm_response = self.llm.process(cleaned_message)
             lm_skill_response = self._run_lm_skills(cleaned_message, llm_response)
-            return lm_skill_response or llm_response
+            final_response = lm_skill_response or llm_response
+            self._capture_dynamic_memory(cleaned_message, final_response)
+            return final_response

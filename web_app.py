@@ -7,6 +7,7 @@ from flask import Flask, jsonify, render_template, request
 from api_configs.configs import get_llm_config
 from buddy_session import BuddySession
 from child_profile import load_child_profile, save_child_profile
+from dynamic_memory import get_dynamic_memory_adapter
 
 
 HOST = os.getenv("BUD_E_WEB_HOST", "127.0.0.1")
@@ -33,15 +34,17 @@ def get_session(session_id: str | None) -> tuple[str, BuddySession]:
     return new_session_id, new_session
 
 
-def normalize_profile_payload(payload: dict) -> dict:
-    return {
+def normalize_profile_payload(payload: dict, existing_profile: dict | None = None) -> dict:
+    profile = dict(existing_profile or {})
+    profile.update({
         "name": (payload.get("name") or "").strip(),
         "age": (payload.get("age") or "").strip(),
         "interests": [item.strip() for item in (payload.get("interests") or []) if item.strip()],
         "goals": [item.strip() for item in (payload.get("goals") or []) if item.strip()],
         "recent_topics": [item.strip() for item in (payload.get("recent_topics") or []) if item.strip()],
         "parent_preferences": (payload.get("parent_preferences") or "").strip(),
-    }
+    })
+    return profile
 
 
 @app.get("/")
@@ -51,7 +54,14 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify({"ok": True, "provider": llm_config["default_model"]})
+    dynamic_memory = get_dynamic_memory_adapter()
+    return jsonify(
+        {
+            "ok": True,
+            "provider": llm_config["default_model"],
+            "dynamic_memory_provider": dynamic_memory.provider_name,
+        }
+    )
 
 
 @app.get("/api/profile")
@@ -62,7 +72,7 @@ def get_profile():
 @app.post("/api/profile")
 def update_profile():
     payload = request.get_json(silent=True) or {}
-    profile = normalize_profile_payload(payload)
+    profile = normalize_profile_payload(payload, load_child_profile())
     saved_profile = save_child_profile(profile)
 
     with sessions_lock:

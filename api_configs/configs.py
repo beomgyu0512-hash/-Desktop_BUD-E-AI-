@@ -40,7 +40,7 @@ tts_config = {
     "default_api": "deepgram",
     "apis": {
         "deepgram": {
-            "model": "aura-helios-en",
+            "model": os.getenv("DEEPGRAM_TTS_MODEL", "aura-helios-en"),
 
             "api_key": os.getenv("DEEPGRAM_API_KEY"),
                     },
@@ -53,8 +53,8 @@ asr_config = {
     "default_api": "deepgram",
     "apis": {
         "deepgram": {
-            "model": "nova-2",
-            "language":"en-US",
+            "model": os.getenv("DEEPGRAM_ASR_MODEL", "nova-2"),
+            "language": os.getenv("DEEPGRAM_ASR_LANGUAGE", "zh-CN"),
             "sample_rate":16000,
 
             "api_key": os.getenv("DEEPGRAM_API_KEY"),
