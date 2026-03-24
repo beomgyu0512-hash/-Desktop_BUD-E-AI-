@@ -1,253 +1,212 @@
-# BUD-E explains itself
+# Buddy 儿童 AI 学习伙伴
 
-<p align="center">
-  <a href="https://youtu.be/RYdWd7hRZQk">
-    <img src="https://github.com/LAION-AI/Desktop_BUD-E/blob/main/BUD-E-Yt.jpg?raw=true" alt="BUD-E Framework Introduction">
-  </a>
-</p>
+我们基于 [LAION 的 Desktop BUD-E](https://github.com/LAION-AI/Desktop_BUD-E) 做了儿童学习场景改造。当前目标不是做一个通用桌面助手，而是先做出“适合孩子和家长使用“的学习陪伴体验。
 
-## Project Vision
+当前仓库包含：
 
-BUD-E, short for "Buddy", is an innovative voice assistant framework designed to be a plug-and-play interface that allows seamless interaction with open-source AI models and API interfaces. The framework aims to empower anyone to contribute and innovate, particularly in education and research, by maintaining a low entry threshold for writing new skills and building a supportive community.
+- 儿童模式系统提示词
+- 面向儿童的学习技能
+- 浏览器文字聊天入口
+- 本地桌面文字聊天入口
+- 家长设置面板
+- 结构化长期档案
+- 预留好的动态记忆适配层
 
-## Key Features and Flexibility
+## 现在能做什么
 
-BUD-E integrates several core components including a speech-to-text model, a language model, and a text-to-speech model. These components are interchangeable and can be accessed either locally or through APIs. The framework supports integration with services from leading providers like OpenAI and Anthropic, or allows users to deploy their own models using open-source frameworks like Ollama or VLLM.
+目前项目已经可以用于以下场景：
 
-### Skills Interface
+- 浏览器中进行中文文字聊天
+- 用家长设置面板保存孩子资料
+- 根据孩子档案调整后续回答
+- 通过本地技能回答时间、生成学习计划、做儿童化解释
+- 在代码层为后续 `mem0` 动态记忆接入做好准备
 
-Any Python function can become a skill, allowing the voice assistant to handle tasks ranging from processing screenshots with captioning and OCR models to interacting with clipboard contents including text, images, and links. BUD-E supports dynamic skill activation, either by allowing the language model to choose a skill from a "menu" that gets dynamically added to the system prompt or through direct keywords said by the user. 
-Skills get dynamically added from the "skills" folder to the system, without any need to change the main code (buddy.py). Think of it as similar to adding mods to the "Mods" folder in Minecraft.
+当前项目更适合：
 
-## Community and Educational Focus
+- 本地开发
+- 产品原型验证
+- 家长和朋友小范围体验
 
-BUD-E is dedicated to fostering a community-centric development environment with a strong emphasis on education and research. The framework encourages the development of skills that aid in educational content delivery, such as navigating through specific online courses or generating custom learning paths from YouTube playlists.
+## 下一步目标
 
-## Installation Instructions
+- 用大量数据和对话测试长期记忆功能
+- 训练、微调模型
+  - 在儿童使用时的适配性
+  - 实现家长通过自然语言对话设置和核对需求
+- 实现桌面客户端部署
 
-The current version of BUD-E currently uses Deepgram for the audio service and Groq the LLM. For the wake word detection it uses Porcupine from Pico Voice ( https://picovoice.ai/platform/porcupine/ ). We are working on a stack of open source models that can very soon run it completely local or on your own API server.
+## 当前入口
 
-Recommendation: Make a venv and install everything in the venv. Make sure your microphone works.
+### 1. 终端文字模式
 
-Set your API keys here:
 ```sh
-echo 'export PORCUPINE_API_KEY="yourporcupineapikeyhere"' >> ~/.bashrc
-echo 'export MOONSHOT_API_KEY="yourkimiapikeyhere"' >> ~/.bashrc
-echo 'export KIMI_BASE_URL="https://api.moonshot.cn/v1"' >> ~/.bashrc
-echo 'export KIMI_MODEL="moonshot-v1-8k"' >> ~/.bashrc
-echo 'export DEEPGRAM_API_KEY="yourdeepgramapikeyhere"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-Clone the repository and install the required packages:
-```sh
-git clone https://github.com/christophschuhmann/Desktop_BUD-E
-pip install -U -r requirements.txt
 python3 buddy.py
 ```
 
-## Child Learning Companion Layer
+如果你只想在终端里打字测试，使用：
 
-This fork also includes an optional child-focused project layer:
-
-- child-oriented prompt at `prompts/child_learning_companion_system_prompt.txt`
-- starter educational skills at `skills/learning_companion.py`
-- setup notes at `docs/child-learning-companion.md`
-
-To enable the child-focused prompt for a run:
 ```sh
+export BUD_E_DISABLE_WAKE_WORD=1
+export BUD_E_TEXT_MODE=1
 export BUD_E_SYSTEM_PROMPT_FILE=prompts/child_learning_companion_system_prompt.txt
 python3 buddy.py
 ```
 
-To run without a wake word during development:
-```sh
-export BUD_E_DISABLE_WAKE_WORD=1
-python3 buddy.py
-```
+### 2. 浏览器模式
 
-To test without microphone input:
-```sh
-export BUD_E_TEXT_MODE=1
-python3 buddy.py
-```
-
-## Browser UI
-
-This fork also includes a minimal browser-based Buddy chat UI.
-
-Start it with:
 ```sh
 python3 web_app.py
 ```
 
-Then open:
-```sh
+然后打开：
+
+```text
 http://127.0.0.1:8000
 ```
 
-Optional environment variables:
+浏览器版本当前支持：
 
-- `BUD_E_WEB_HOST` defaults to `127.0.0.1`
-- `BUD_E_WEB_PORT` defaults to `8000`
+- 文字聊天
+- 新对话
+- 家长设置
+- 长期档案保存
 
-The current web version is text-only. It reuses the same prompt and skill pipeline as the terminal flow, including local keyword skills such as telling the current time.
+### 3. 桌面模式
 
-It now also includes a parent settings panel that edits the persistent child profile directly from the browser.
-The panel can update:
-
-- child name
-- age
-- interests
-- learning goals
-- recent topics
-- parent preferences
-
-To let other devices on the same local network open it:
-```sh
-BUD_E_WEB_HOST=0.0.0.0 python3 web_app.py
-```
-
-Then open `http://YOUR_LAN_IP:8000` from another device on the same Wi-Fi.
-
-For deployment notes, see `docs/deployment.md`.
-
-## Desktop App
-
-This fork also includes a minimal PySide6 desktop client for local text chat.
-
-Start it with:
 ```sh
 python3 desktop_app.py
 ```
 
-The desktop app reuses the same session, prompt, and skill pipeline as the web version, but runs as a local native window.
+桌面版目前是最小可用文字聊天客户端，和网页版共用同一套会话、技能和记忆逻辑。
 
-## Default LLM provider
+## 环境变量
 
-This fork is configured to use the Kimi API by default through Moonshot's OpenAI-compatible endpoint.
-
-Required environment variables:
+至少需要：
 
 - `MOONSHOT_API_KEY`
-- `KIMI_BASE_URL` defaults to `https://api.moonshot.cn/v1`
-- `KIMI_MODEL` defaults to `moonshot-v1-8k`
+- `DEEPGRAM_API_KEY`
 
-## Default Chinese behavior
+常用配置：
 
-This fork now defaults to Chinese-first interaction for child-facing flows:
+- `KIMI_BASE_URL` 默认 `https://api.moonshot.cn/v1`
+- `KIMI_MODEL` 默认 `moonshot-v1-8k`
+- `BUD_E_SYSTEM_PROMPT_FILE` 默认可指向 `prompts/child_learning_companion_system_prompt.txt`
+- `BUD_E_DISABLE_WAKE_WORD=1` 开发阶段跳过唤醒词
+- `BUD_E_TEXT_MODE=1` 终端打字模式
+- `BUD_E_WEB_HOST` 默认 `127.0.0.1`
+- `BUD_E_WEB_PORT` 默认 `8000`
 
-- the child prompt defaults to simplified Chinese answers
-- browser UI examples and parent settings defaults are in Chinese
-- child skills such as study plans and explanations return Chinese text by default
-- Deepgram ASR now defaults to `zh-CN`
+如果要启用 `mem0`：
 
-Audio note:
+- `MEM0_API_KEY`
+- `BUD_E_DYNAMIC_MEMORY_PROVIDER=mem0`
+- `BUD_E_MEM0_MODE=platform`
 
-- Deepgram `nova-2` supports Mandarin Chinese ASR (`zh-CN`) according to the official model/language table
-- Deepgram Aura TTS does not currently list Chinese among its supported languages, so the default TTS model remains an English Aura voice unless you swap TTS providers
+示例模板见：
+[.env.example](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/.env.example)
 
-Useful environment variables:
+## 中文默认行为
 
-- `DEEPGRAM_ASR_MODEL` defaults to `nova-2`
-- `DEEPGRAM_ASR_LANGUAGE` defaults to `zh-CN`
-- `DEEPGRAM_TTS_MODEL` defaults to `aura-helios-en`
+这个 fork 已经改成“中文优先”：
 
-## Long-term child memory
+- 儿童提示词默认用简体中文
+- 网页默认文案和家长设置示例是中文
+- 儿童技能默认输出中文
+- Deepgram 语音识别默认是 `zh-CN`
 
-This fork now includes a minimal persistent child profile stored in:
+当前语音边界：
 
-- `child_profile.json`
+- 中文识别已默认开启
+- 中文文字回答已默认开启
+- Deepgram Aura 目前不作为中文 TTS 使用，如果要真正的中文语音播报，后面需要切换 TTS 提供方
 
-The shared Buddy session injects this memory into the system prompt for personalization.
+## 长期记忆设计
 
-Current profile fields:
+项目当前使用两层记忆。
 
-- `name`
-- `age`
-- `interests`
-- `goals`
-- `recent_topics`
-- `parent_preferences`
+### 1. 主档案：`child_profile.json`
 
-You can move the file by setting:
+用于保存稳定、家长可控的信息：
 
-- `BUD_E_CHILD_PROFILE_FILE`
+- 孩子姓名
+- 年龄
+- 兴趣
+- 学习目标
+- 最近学习主题
+- 家长偏好
+- 稳定的 `child_id`
 
-The browser-based parent settings panel reads and writes this file through `/api/profile`.
+这份档案是当前系统的 `source of truth`。
 
-## Dual-memory architecture
+### 2. 动态记忆层
 
-Buddy now uses a two-layer memory design:
+用于处理“从对话里长出来的记忆”，例如：
 
-- `child_profile.json` is the source of truth for stable child identity and parent-controlled settings
-- the dynamic memory layer is a pluggable recall/capture adapter for conversation-derived memories
+- 最近常卡住的知识点
+- 更适合的讲解方式
+- 近期反复出现的话题
+- 学习进步趋势摘要
 
-Current status:
+当前状态：
 
-- the child profile layer is active now
-- the dynamic memory layer is wired in through `dynamic_memory.py`
-- dynamic memory capture is filtered by `dynamic_memory_rules.py`
-- the default provider is `none`, which safely disables dynamic recall/capture
-- a future `mem0` integration can be enabled without changing the main Buddy session flow
+- 规则层已经接好
+- 适配层已经预留 `mem0`
+- 默认 provider 仍然是 `none`
 
-Relevant environment variables:
+目前长期记忆主力是 `child_profile.json`，未来可能更新为 `mem0`。
 
-- `BUD_E_CHILD_PROFILE_FILE`
-- `BUD_E_DYNAMIC_MEMORY_PROVIDER` with `none` or `mem0`
-- `BUD_E_MEM0_MODE` with `platform` or `open-source`
-- `MEM0_API_KEY` when using Mem0 cloud
-- `MEM0_DIR` for Mem0 local state; defaults to `.mem0` inside the project directory in this fork
+## 动态记忆规则
 
-Dynamic memory capture rules currently try to store:
+动态记忆先过滤，不保存所有对话。
 
-- stable learning preferences
-- recurring struggles
-- summarized learning outcomes and progress trends
-- preferred explanation styles
-- recent learning topics
-- parent-guided teaching preferences
+当前倾向于保存：
 
-They currently avoid storing:
+- 稳定偏好
+- 反复出现的困难点
+- 进步趋势摘要
+- 学习风格偏好
+- 对教学有帮助的家长引导
 
-- sensitive personal data
-- clearly ephemeral utility requests such as asking for the current time
-- raw exercise logs such as item-by-item question results
-- generic acknowledgments and low-value chatter
+当前会跳过：
 
-## Skills
+- 敏感信息
+- 一次性临时请求
+- “现在几点”这类工具型问题
+- 逐题流水账
+- 低价值寒暄
 
-### Types of Skills
-BUD-E supports two types of skills: LM Activated Skills and Keyword Activated Skills.
+规则实现见：
+[dynamic_memory_rules.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/dynamic_memory_rules.py)
 
-#### LM Activated Skills
-These are Python functions that the language model (LM) can call when it deems the function useful for a given request. Each LM Activated Skill requires a specific comment structure before the function definition.
+## 主要文件
 
-Example:
-```python
-# LM ACTIVATED SKILL: TITLE: Weather Report DESCRIPTION: Provides the current weather for a given location. USAGE INSTRUCTIONS: To use this skill, call it with the following tags: <weather_report> ... </weather_report> Example: <weather_report> Hamburg </weather_report>
-def weather_report(location):
-    # Implementation to fetch and return weather report for the location
-    pass
-```
+- [buddy.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/buddy.py)
+  终端和语音主入口
+- [web_app.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/web_app.py)
+  浏览器聊天入口
+- [desktop_app.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/desktop_app.py)
+  本地桌面聊天入口
+- [buddy_session.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/buddy_session.py)
+  共享会话与提示词编排层
+- [skills/learning_companion.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/skills/learning_companion.py)
+  儿童学习技能
+- [child_profile.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/child_profile.py)
+  长期主档案持久化
+- [dynamic_memory.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/dynamic_memory.py)
+  动态记忆适配层
 
-#### Keyword Activated Skills
-These skills are activated based on specific keyword combinations present in the user's input. They also require a specific comment structure before the function definition.
+## 已知限制
 
-Example:
-```python
-# KEYWORD ACTIVATED SKILL: [["weather", "report"], ["forecast", "today"]]
-def weather_report_skill():
-    # Implementation to fetch and return today's weather forecast
-    pass
-```
-
-### Skill Usage
-Skills in the BUD-E framework are used either by the language model dynamically choosing the appropriate skill or by the user triggering them through specific keywords. The integration of skills is seamless, allowing for an intuitive and flexible interaction with the voice assistant.
+- 浏览器版目前只支持文字聊天
+- `mem0` 代码入口已预留，但默认不启用
+- 中文语音播报还没有切到正式可用的中文 TTS
 
 
-## Call for Collaboration
+## 部署
 
-This project is led by LAION, with support from Intel, Camb AI, Alignment Labs, the Max Planck Institute for Intelligent Systems in Tübingen, and the Tübingen AI Center. We invite collaboration from open-source communities, educational and research institutions, and interested companies to help scale BUD-E’s impact.
+阿里云和其他服务器部署说明见：
+[deployment.md](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/docs/deployment.md)
 
-We encourage contributions that push the boundaries of educational and research tools, leveraging the collective creativity and expertise of the global open-source community.
+儿童模式集成说明见：
+[child-learning-companion.md](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/docs/child-learning-companion.md)

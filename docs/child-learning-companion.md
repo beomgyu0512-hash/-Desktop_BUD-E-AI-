@@ -1,162 +1,170 @@
-# Child Learning Companion Integration
+# 儿童学习伙伴集成说明
 
-This repository now includes an optional child-focused project layer that stays compatible with the upstream BUD-E runtime.
+这份文档只说明这个 fork 额外加了什么，以及这些改动为什么不会把上游 BUD-E 主链路搞乱。
 
-## Added assets
+## 这次加了什么
 
-- `skills/learning_companion.py`
-- `prompts/child_learning_companion_system_prompt.txt`
-- `.env.example`
+核心新增分成四层：
 
-## Why this integration is safe
+1. 儿童模式提示词  
+2. 儿童学习技能  
+3. 浏览器和桌面聊天入口  
+4. 长期记忆与动态记忆骨架
 
-- The new prompt file is opt-in. BUD-E still uses `system_prompt.txt` by default.
-- You can switch prompts by setting `BUD_E_SYSTEM_PROMPT_FILE`.
-- The new skills follow the same function signature used by `buddy.py`.
-- The main prompt is rebuilt from its base version each turn, so LM skill descriptions do not accumulate repeatedly.
+对应文件：
 
-## How to enable child mode
+- [prompts/child_learning_companion_system_prompt.txt](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/prompts/child_learning_companion_system_prompt.txt)
+- [skills/learning_companion.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/skills/learning_companion.py)
+- [web_app.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/web_app.py)
+- [desktop_app.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/desktop_app.py)
+- [child_profile.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/child_profile.py)
+- [dynamic_memory.py](/Users/clea/Documents/GitHub/基于BUD-E的儿童AI学习伴侣/-Desktop_BUD-E-AI-/dynamic_memory.py)
 
-1. Create a virtual environment and install `requirements.txt`.
-2. Export the required API keys.
-3. Export `BUD_E_SYSTEM_PROMPT_FILE=prompts/child_learning_companion_system_prompt.txt`.
-4. Run `python3 buddy.py`.
+## 为什么这些改动相对安全
 
-## Default LLM setup
+这次改动遵守了一个原则：尽量把新增能力放在外层，不直接把上游主入口改成难以维护的分支代码。
 
-The project is configured to use Kimi by default.
+目前的安全点：
 
-- `MOONSHOT_API_KEY` is required.
-- `KIMI_BASE_URL` defaults to `https://api.moonshot.cn/v1`.
-- `KIMI_MODEL` defaults to `moonshot-v1-8k`.
+- 儿童提示词通过 `BUD_E_SYSTEM_PROMPT_FILE` 切换
+- 儿童技能仍然遵循 BUD-E 的原始技能签名
+- `buddy.py` 仍然保留为终端/语音主入口
+- 浏览器版和桌面版走共享会话层，而不是把语音逻辑硬塞进网页
+- 动态记忆默认 provider 是 `none`，不会在未确认前自动写入外部系统
 
-## Default Chinese behavior
+## 中文默认策略
 
-The child-facing experience is now Chinese-first by default:
+这个 fork 已经明确改成中文优先：
 
-- the child system prompt defaults to simplified Chinese
-- the browser UI and parent settings examples use Chinese
-- child skills return Chinese text by default
-- ASR defaults to Deepgram `nova-2` with `zh-CN`
+- 默认回答语言是简体中文
+- 儿童技能默认返回中文
+- 网页默认示例和家长设置为中文
+- 语音识别默认是 `zh-CN`
 
-Current audio limitation:
+目前的边界：
 
-- Deepgram ASR supports Mandarin Chinese (`zh-CN`)
-- Deepgram Aura TTS does not currently list Chinese as a supported language
+- 中文理解没有问题
+- 中文文字回复没有问题
+- 中文语音播报还没有切到正式可用的中文 TTS
 
-So the project now defaults to Chinese understanding and Chinese text responses, but spoken Chinese output still requires either a different TTS provider or a future TTS swap.
+## 当前可用入口
 
-## Running without wake words
+### 终端模式
 
-If Porcupine is not configured yet, you can skip wake word detection during development:
+适合开发时快速调试。
 
-1. Export `BUD_E_DISABLE_WAKE_WORD=1`.
-2. Start `python3 buddy.py`.
+常用环境变量：
 
-The app will enter the conversation loop immediately instead of waiting for `hey-buddy`.
+- `BUD_E_DISABLE_WAKE_WORD=1`
+- `BUD_E_TEXT_MODE=1`
+- `BUD_E_SYSTEM_PROMPT_FILE=prompts/child_learning_companion_system_prompt.txt`
 
-## Testing without microphone
+### 浏览器模式
 
-If you want to validate the Kimi conversation flow before fixing microphone streaming:
+运行：
 
-1. Export `BUD_E_TEXT_MODE=1`.
-2. Start `python3 buddy.py`.
-3. Type into the terminal prompt instead of speaking.
+```sh
+python3 web_app.py
+```
 
-## Browser-based testing
+适合：
 
-If you want other people to try Buddy without using the terminal, you can run the minimal web UI:
+- 给别人试用
+- 展示聊天效果
+- 编辑家长设置
 
-1. Start `python3 web_app.py`.
-2. Open `http://127.0.0.1:8000` in a browser.
+### 桌面模式
 
-The current web UI supports text chat only. It keeps per-browser-session conversation memory in the Flask process and reuses the same prompt and skill pipeline as the terminal mode.
-It also includes a parent settings panel that saves long-term child profile data to `child_profile.json`.
+运行：
 
-## Current child-focused skills
+```sh
+python3 desktop_app.py
+```
 
-- `explain_for_child`
-- `create_study_plan`
-- `study_plan_keyword_skill`
-- `update_child_profile`
-- `child_profile_keyword_skill`
+适合：
 
-These are intentionally lightweight. They are meant to establish a safe project structure before adding subject-specific lesson skills.
+- 本地文字聊天
+- 后续继续接语音按钮和系统能力
 
-## Minimal long-term memory
+## 长期记忆设计
 
-This project now stores a simple persistent child profile in `child_profile.json`.
+### 主档案
 
-Stored fields:
+主档案存放在 `child_profile.json`。
 
-- `name`
-- `age`
-- `interests`
-- `goals`
-- `recent_topics`
-- `parent_preferences`
+这层负责稳定事实：
 
-The shared Buddy session loads this file and injects it into the system prompt so web and desktop sessions can personalize replies consistently.
+- 姓名
+- 年龄
+- 兴趣
+- 学习目标
+- 最近主题
+- 家长偏好
+- `child_id`
 
-You can override the file path with:
+它是当前项目的记忆主线，也是家长设置面板真正修改的数据源。
 
-- `BUD_E_CHILD_PROFILE_FILE`
+### 动态记忆
 
-In the browser, these fields can now be edited directly from the parent settings panel instead of only through chat commands.
+动态记忆层用于保存“从互动中慢慢长出来”的信息。
 
-## Two-layer memory design
+更适合放这里的内容包括：
 
-Buddy now separates memory into two roles:
+- 最近常卡住的知识点
+- 更适合的解释方式
+- 近期反复出现的话题
+- 学习进步趋势摘要
 
-1. `child_profile.json`
-   This stores stable, parent-controlled facts such as age, goals, and preferences.
-   It should be treated as the source of truth.
+当前状态：
 
-2. Dynamic memory adapter
-   This is the conversation-derived memory layer used for recall and capture around each turn.
-   It is wired through `dynamic_memory.py`.
+- 规则层已接好
+- 适配层已接好
+- 默认仍然关闭
 
-The current default dynamic memory provider is `none`, which means no extra recall/capture happens yet.
-The session architecture is already prepared for a future Mem0 integration without replacing the child profile layer.
+所以现在项目依然是“主档案已经工作，动态记忆尚未正式启用”的状态。
 
-Recommended rule:
+## 动态记忆规则
 
-- keep identity, age, goals, and parent preferences in `child_profile.json`
-- use Mem0-style dynamic memory only for conversation-derived patterns such as recent struggles, favorite explanation styles, and recurring topics
+动态记忆目前不会盲目存所有聊天。
 
-Environment variables for this layer:
+倾向于保留：
 
-- `BUD_E_DYNAMIC_MEMORY_PROVIDER`
-- `BUD_E_MEM0_MODE`
-- `MEM0_API_KEY`
+- 稳定偏好
+- 反复出现的学习困难
+- 学习结果摘要
+- 教学风格偏好
+- 有帮助的家长指导
 
-## Dynamic memory capture rules
+会主动跳过：
 
-Before a turn is sent to the dynamic memory adapter, Buddy now runs a rule layer in `dynamic_memory_rules.py`.
+- 敏感个人信息
+- 一次性工具请求
+- “现在几点”这种短期问题
+- 逐题练习流水
+- 没信息量的客套话
 
-The current rules prefer to store:
+这层规则的目标很简单：
 
-- stable preferences
-- recurring learning difficulties
-- summarized learning outcomes and progress trends
-- explanation-style preferences
-- recent learning themes
-- useful parent guidance
+- 记趋势，不记流水
+- 记规律，不记题号
+- 记教学意义，不记聊天噪声
 
-The current rules avoid storing:
+## mem0 的位置
 
-- sensitive personal data
-- clearly temporary utility requests like asking for the current time
-- raw item-by-item exercise logs
-- empty, generic, or very short exchanges
+项目现在已经给 `mem0` 留好了入口，但还没有默认启用。
 
-If `BUD_E_DEBUG=1` is enabled, Buddy prints the capture decision reason for each turn.
+推荐的角色分工是：
 
-## Tool results and child-friendly wording
+- `child_profile.json` 负责主档案
+- `mem0` 负责补充型动态记忆
 
-The shared Buddy session now supports a two-step response flow for keyword skills:
+也就是说，后面真接 `mem0` 时，也不应该让它覆盖孩子年龄、家长偏好这类主档案信息。
 
-1. A local skill can provide factual output first.
-2. The LLM then rewrites that factual result into child-friendly Chinese while keeping the tool result accurate.
+## 当前更适合继续做什么
 
-If the LLM call fails, Buddy falls back to the original tool result.
+如果继续往下开发，优先级建议是：
+
+1. 切到正式可用的中文 TTS
+2. 扩充儿童学习技能
+3. 再启用 `mem0`
+4. 最后再做更细的学习轨迹与家长报告
